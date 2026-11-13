@@ -19,15 +19,17 @@ import os
 import numpy as np
 import pandas as pd
 
-from . import data
+from . import data, diagnose, features, journal
 from .engine import BENCH, Panel, simulate, stats
-from .research import load_config
-from .strategies import LABELS, STRATEGIES
+from .research import load_config, save_config, sid_of
+from .strategies import LABELS, build_signal
 from .universe import ROOT, load_all_listed
 
 DOCS = os.path.join(ROOT, "docs", "data")
 LEDGER = os.path.join(DOCS, "ledger.json")
-TOP_N = 10          # 画面に出す買い候補の数（戦略ごと）
+MIN_FWD = 30        # フォワードの成績を判断するのに必要な決済数
+MILESTONES = (30, 60, 100, 150, 200, 300, 500)
+TOP_N = 10         # 画面に出す買い候補の数（戦略ごと）
 QUOTE_DAYS = 60     # 保有株の売り判定用に配る終値の日数
 
 
@@ -63,6 +65,37 @@ def _r(x, nd=1):
     return round(x, nd) if math.isfinite(x) else None
 
 
+def health(closed: pd.DataFrame, bt: dict) -> dict:
+    """フォワードの平均損益が、バックテストの期待からどれだけずれているか。
+    z は「ずれ ÷ 偶然で起こりうる幅」。-2 より小さければ、偶然とは考えにくいほど期待を下回っている。"""
+    n = len(closed)
+    out = {"n": n, "enough": False, "z": 0.0, "fwd_avg": None, "bt_avg": bt.get("avg_ret"),
+           "status": f"判断不能（あと{max(MIN_FWD - n, 0)}件）"}
+    if n == 0:
+        return out
+    out["fwd_avg"] = float(closed["ret"].mean())
+    if n < MIN_FWD or bt.get("avg_ret") is None:
+        return out
+    sd = float(closed["ret"].std(ddof=1))
+    z = (out["fwd_avg"] - bt["avg_ret"]) / (sd / math.sqrt(n)) if sd > 0 else 0.0
+    out.update({"enough": True, "z": round(z, 2),
+                "status": "期待を大きく下回る" if z < -2 else ("期待を上回る" if z > 2 else "想定の範囲内")})
+    return out
+
+
+def review(j: dict, sid: str, label: str, n: int, s: dict, bt: dict, hl: dict, ds: str) -> None:
+    """フォワードの決済が30件・60件・100件…に達するたび、振り返りを学習ノートに1回だけ書く。"""
+    done = j.setdefault("fwd_milestones", {})
+    reached = max((m for m in MILESTONES if n >= m), default=0)
+    if reached <= done.get(sid, 0):
+        return
+    done[sid] = reached
+    journal.add(j, "監視", f"{label}: フォワードテスト{reached}件の振り返り",
+                f"前向きの成績は 勝率{s['win_rate']:.0%}・平均損益{s['avg_ret']:+.2%}・市場平均との差{s['avg_excess']:+.2%}。"
+                f"バックテストの期待は 勝率{bt.get('win_rate', 0):.0%}・平均損益{bt.get('avg_ret', 0):+.2%}。判定: {hl['status']}。",
+                result=hl["status"], date=ds)
+
+
 def run() -> None:
     cfg = load_config()
     cap, lot, cost = cfg["capital"], cfg["lot"], cfg["cost_per_side"]
@@ -93,9 +126,16 @@ def run() -> None:
 
     strategies_out = []
     entries = [(s, True) for s in cfg.get("adopted", [])] + [(s, False) for s in cfg.get("watch", [])]
+    j = journal.load()
+    val = {s.get("id", s["name"]): s for s in _load_json(os.path.join(DOCS, "validation.json"), {"strategies": []})["strategies"]}
+    diag = {s["id"]: s for s in _load_json(os.path.join(DOCS, "diagnosis.json"), {"strategies": []})["strategies"]}
+    moves = []   # 昇格・降格（ループの後でまとめて設定に反映）
     for spec, adopted in entries:
         name, params = spec["name"], spec["params"]
-        sig, score, ex = STRATEGIES[name](p, base, **params)
+        sid = sid_of(spec)                    # 台帳や画面で戦略を区別する名前
+        filters = spec.get("filters") or []
+        label = spec.get("label") or LABELS[name]
+        sig, score, ex = build_signal(p, base, name, params, filters)
 
         # --- 明日の買い候補（今日の終値で条件を満たした銘柄をスコア順に）
         row = sig.iloc[-1]
@@ -104,9 +144,9 @@ def run() -> None:
         cand_out = []
         for rank, code in enumerate(cands, 1):
             c, a = float(close_now[code]), float(atr_now[code])
-            key = (ds, code, name)
+            key = (ds, code, sid)
             if key not in seen:
-                ledger["signals"].append({"date": ds, "code": code, "strategy": name, "rank": rank,
+                ledger["signals"].append({"date": ds, "code": code, "strategy": sid, "rank": rank,
                                           "close": _r(c), "adopted": adopted})
                 seen.add(key)
             if rank <= TOP_N:
@@ -120,7 +160,7 @@ def run() -> None:
 
         # --- フォワードテスト: 台帳に載ったシグナルだけをルール通りに売買したと仮定
         tr = simulate(p, sig, score, ex, cost=cost, include_open=True)
-        led = {(s["date"], s["code"]): s for s in ledger["signals"] if s["strategy"] == name}
+        led = {(s["date"], s["code"]): s for s in ledger["signals"] if s["strategy"] == sid}
         tr["key"] = list(zip(tr["signal_date"].dt.strftime("%Y-%m-%d"), tr["code"]))
         fwd = tr[tr["key"].isin(led.keys())].copy()
         fwd["rank"] = [led[k]["rank"] for k in fwd["key"]]
@@ -142,8 +182,30 @@ def run() -> None:
         open_rows = [trade_row(t) for t in fwd[fwd["reason"] == "open"].itertuples()]
         closed_rows = [trade_row(t) for t in closed.sort_values("exit_date", ascending=False).head(200).itertuples()]
         s_all, s_top = stats(closed), stats(top)
+
+        # --- 監視: フォワードの成績がバックテストの期待と合っているか
+        bt = val.get(sid, {}).get("all", {})
+        hl = health(closed, bt)
+        passed_bt = bool(spec.get("passed_backtest"))
+        if adopted and hl["enough"] and (s_all["avg_ret"] <= 0 or hl["z"] < -2):
+            moves.append((spec, "demote", hl))
+        elif (not adopted and passed_bt and not spec.get("demoted") and hl["enough"]
+              and s_all["avg_ret"] > 0 and s_all["avg_excess"] > 0 and hl["z"] >= -2):
+            moves.append((spec, "promote", hl))
+        stage = "採用中" if adopted else ("フォワード確認中" if passed_bt and not spec.get("demoted") else "検証中")
+
+        # --- フォワード結果の原因分析（30件たまったら特徴ごとにも分解する）
+        fdiag = {"reasons": diagnose.by_reason(closed) if len(closed) else [], "buckets": None, "findings": []}
+        edges = diag.get(name, {}).get("edges")
+        if len(closed) >= MIN_FWD and edges:
+            fc = features.at_trades(p, closed)
+            fdiag["buckets"] = diagnose.buckets(fc, edges)
+            fdiag["findings"] = diagnose.findings(label, s_all, fdiag["reasons"], {}, None)
+        review(j, sid, label, len(closed), s_all, bt, hl, ds)
+
         strategies_out.append({
-            "name": name, "label": LABELS[name], "adopted": adopted, "params": params,
+            "id": sid, "name": name, "label": label, "adopted": adopted, "stage": stage, "params": params,
+            "filters_text": [features.describe(f) for f in filters], "health": hl, "diag": fdiag,
             "exit": {"stop_atr": ex.stop_atr, "trail_atr": ex.trail_atr, "target_atr": ex.target_atr,
                      "exit_above_sma": ex.exit_above_sma, "exit_below_sma": ex.exit_below_sma,
                      "max_hold": ex.max_hold},
@@ -153,8 +215,32 @@ def run() -> None:
             "forward": {"all": {k: v for k, v in s_all.items() if k != "yearly"},
                         "top": {k: v for k, v in s_top.items() if k != "yearly"}},
         })
-        print(f"[{name}] 候補 {len(cands)} / 仮想保有 {len(open_rows)} / 決済済み {len(closed)}", flush=True)
+        print(f"[{sid}] {stage} 候補 {len(cands)} / 仮想保有 {len(open_rows)} / 決済済み {len(closed)} / {hl['status']}",
+              flush=True)
 
+    # --- 昇格・降格を設定ファイルと学習ノートに反映（画面への反映は次回の実行から）
+    for spec, kind, hl in moves:
+        label = spec.get("label") or LABELS[spec["name"]]
+        if kind == "promote":
+            cfg["watch"].remove(spec)
+            cfg["adopted"].append(spec)
+            spec["promoted"] = ds
+            journal.add(j, "監視", f"{label} を採用に昇格",
+                        f"バックテスト合格に加え、フォワードテスト{hl['n']}件で平均損益{hl['fwd_avg']:+.2%}・"
+                        "市場平均との差もプラスを確認した。", result="採用", date=ds)
+        else:
+            cfg["adopted"].remove(spec)
+            cfg["watch"].append(spec)
+            spec["demoted"], spec["demoted_by"] = ds, "forward"
+            journal.add(j, "監視", f"{label} を採用から外した",
+                        f"フォワードテスト{hl['n']}件の平均損益が{hl['fwd_avg']:+.2%}で、バックテストの期待"
+                        f"{hl['bt_avg']:+.2%}を大きく下回った（ずれの大きさ z={hl['z']:.1f}）。",
+                        ["過去データで合格したルールでも、実際の相場で通用しなくなることがある。原因を調べ直すまで買いシグナルは参考扱い。"],
+                        result="降格", date=ds)
+        print(f"[{sid_of(spec)}] {'昇格' if kind == 'promote' else '降格'}", flush=True)
+    if moves:
+        save_config(cfg)
+    journal.save(j)
     _dump(LEDGER, ledger)
 
     b = p.c[BENCH].dropna()

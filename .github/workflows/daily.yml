@@ -4,12 +4,16 @@ on:
   schedule:
     # 平日 18:10（日本時間）= 09:10 UTC。大引け(15:30)後、株価データが出そろってから実行
     - cron: "10 9 * * 1-5"
-    # 土曜 10:10（日本時間）に監視銘柄を作り直す
+    # 土曜 10:10（日本時間）に監視銘柄を作り直し、学習サイクルを回す
     - cron: "10 1 * * 6"
   workflow_dispatch:
     inputs:
       refresh_universe:
         description: "監視銘柄も作り直す"
+        type: boolean
+        default: false
+      learn:
+        description: "学習サイクルも回す（約40分）"
         type: boolean
         default: false
 
@@ -23,7 +27,7 @@ concurrency:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -36,6 +40,19 @@ jobs:
         if: github.event.schedule == '10 1 * * 6' || inputs.refresh_universe
         run: python -m src.refresh_universe
 
+      # --- 週1回の学習サイクル: 10年分のデータで検証し直し、負けの原因を分析して改善案を採点する
+      - name: 学習用の株価を取得（全上場銘柄・10年分）
+        if: github.event.schedule == '10 1 * * 6' || inputs.learn
+        run: python -m src.data --period 10y --tag bt
+
+      - name: 検証（5基準の合否）
+        if: github.event.schedule == '10 1 * * 6' || inputs.learn
+        run: python -m src.research
+
+      - name: 学習ループ（原因分析 → 改善案 → 採点 → 学習ノート）
+        if: github.event.schedule == '10 1 * * 6' || inputs.learn
+        run: python -m src.learn
+
       - name: 株価を取得（監視銘柄・2年分）
         run: python -m src.data --period 2y --tag daily
 
@@ -46,6 +63,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/data config/universe.csv config/all_listed.csv
+          git add docs/data config
           git diff --cached --quiet || git commit -m "判定を更新 $(date -u +%Y-%m-%d)"
           git push

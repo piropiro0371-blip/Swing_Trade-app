@@ -192,6 +192,8 @@ def simulate(p: Panel, entries: pd.DataFrame, score: pd.DataFrame, ex: ExitSpec,
                     continue
                 x = n - 1
                 exit_px = c[x] if c[x] > 0 else entry
+            if reason.startswith("損切り") and exit_px >= entry:
+                reason = "逆指値で利益確定"   # 引き上げた逆指値に掛かったが、買値より上で売れた
             busy_until = x
             rows.append((j, i, e, x, entry, exit_px, held, S[i, j], reason, stop, pending or ""))
     if not rows:

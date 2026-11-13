@@ -12,11 +12,33 @@
 | 「この結果は本物？」「採用していい？」 | `validation-auditor`（読み取り専用） | `docs/data/validation.json`, `data/research/grid.csv` |
 | 「自動更新が止まった」「画面を直して」 | `system-operator` | `src/daily.py`, `docs/index.html`, `.github/workflows/` |
 
+| 「新しい手法を調べて」「テクニックを学習して」 | `technique-scout` | `docs/data/hypotheses.json` |
+
 小さな質問や1ファイルの修正は、振り分けずにメインがそのまま対応してよい。
+
+## 学習の仕組み（精度向上のループ）
+
+戦略は **検証中 → フォワード確認中（バックテスト合格）→ 採用中** の順に進む。飛び級はさせない。
+
+| いつ | 何が動くか | 中身 |
+|---|---|---|
+| 毎日（自動） | `src/daily.py` | フォワード成績とバックテスト期待のずれを監視。決済30件以上でプラスなら昇格、期待を大きく下回れば降格。30/60/100件…の節目で振り返りを学習ノートに記録 |
+| 毎週土曜（自動） | `src/research.py` → `src/learn.py` | 10年分で再検証 → トレードを特徴ごとに分解して負けの原因を分析 → 絞り込み案を機械的に作成 → 学習期間で予選 → 上位3案だけ検証期間で本選 → 学習ノートに記録 |
+| 「学習サイクルを回して」と言われたとき（Claude） | 下の手順 | 手法の調査と、新しい仮説の実装・検証 |
+
+「学習サイクルを回して」の手順:
+1. `docs/data/journal.json`・`diagnosis.json`・`today.json` を読み、直近の原因分析とフォワードの状況を要約する。
+2. `technique-scout` に手法を調べさせ、研究リスト（`hypotheses.json`）に最大3件追加する。
+3. 研究リストの「未検証」から1〜2件選び、`strategy-researcher` に実装と検証をさせる。
+4. 結果を `hypotheses.json` の `status`・`result` と、学習ノート（`src/journal.py` の `add()`、kind="調査"）に書く。不合格も必ず書く。試した設定は `journal.register()` で数に入れる（学習期間だけの簡易調査は `extra_trials` に加算）。
+5. 合格候補が出たら `validation-auditor` に点検させてから報告する。
+
+新しい特徴（原因分析の切り口）を足したいときは `src/features.py` の `FEATURES` に1行足す。学習ループが自動で使う。
 
 ## 守ること（検証の規律）
 
-- **採用の判定は `src/research.py` の5基準だけ**で決める。基準を後から緩めて合格させない。基準そのものを変えるときは、変える前にユーザーに理由を説明して了承を得る。
+- **学習ループの歯止めを外さない**: 試した数に応じて上がる合格ライン（`src/journal.py` の `t_required`）、予選は学習期間のみ、本選は戦略ごとに上位3案まで、採用にはフォワード30件の確認が必要。これらを緩めると「過去にだけ合うルール」が量産される。
+- **採用の判定は `src/research.py` の5基準とフォワード確認だけ**で決める。基準を後から緩めて合格させない。基準そのものを変えるときは、変える前にユーザーに理由を説明して了承を得る。
 - 新しい仮説は**学習期間（`in_sample_end` まで）だけ**で探す。検証期間の成績を見て設定を選び直さない（見たら、その期間はもう検証に使えない）。
 - 試した仮説の数を報告に必ず書く。たくさん試せば偶然良く見えるものが必ず出る。
 - 成績は必ず「コスト差引後」「市場平均（TOPIX連動ETF 1306）との差」で語る。上昇相場では何を買っても儲かって見えるため。
@@ -36,6 +58,7 @@
 ```
 python -m src.data --period 10y --tag bt     # バックテスト用データ取得（20〜30分）
 python -m src.research                        # 検証 → docs/data/validation.json と config/strategy.json を更新
+python -m src.learn                           # 学習ループ → diagnosis.json / journal.json を更新（research の後に実行）
 python -m src.refresh_universe                # 監視銘柄の作り直し
 python -m src.data --period 2y --tag daily    # 日次用データ取得
 python -m src.daily                           # 今日の判定とフォワードテスト更新

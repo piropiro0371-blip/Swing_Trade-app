@@ -15,7 +15,10 @@
         "stop_atr": 3.0,
         "max_hold": 10,
         "regime": true
-      }
+      },
+      "id": "pullback",
+      "label": "押し目買い",
+      "passed_backtest": false
     },
     {
       "name": "breakout",
@@ -25,7 +28,10 @@
         "trail_atr": 2.0,
         "max_hold": 40,
         "regime": false
-      }
+      },
+      "id": "breakout",
+      "label": "高値ブレイク",
+      "passed_backtest": false
     },
     {
       "name": "gap_drift",
@@ -35,7 +41,10 @@
         "trail_atr": 3.0,
         "max_hold": 20,
         "regime": true
-      }
+      },
+      "id": "gap_drift",
+      "label": "窓開け上昇の追随",
+      "passed_backtest": false
     }
   ]
 }

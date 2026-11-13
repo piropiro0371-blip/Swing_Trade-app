@@ -73,6 +73,15 @@ GRID = {
 }
 
 
+def build_signal(p: Panel, base: pd.DataFrame, name: str, params: dict, filters: list | None = None):
+    """戦略の買いシグナルに、学習で見つけた絞り込み条件（あれば）を重ねる。"""
+    sig, score, ex = STRATEGIES[name](p, base, **params)
+    if filters:
+        from . import features
+        sig = sig & features.mask(p, filters)
+    return sig, score, ex
+
+
 def grid(name: str) -> list[dict]:
     g = GRID[name]
     keys = list(g)
