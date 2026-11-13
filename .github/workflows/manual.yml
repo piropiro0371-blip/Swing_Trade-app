@@ -1,0 +1,115 @@
+name: 手動実行
+
+# Web画面の「手動実行」タブから開く実行フォーム。
+# 「Run workflow」を押し、何を実行するかを選んで緑のボタンを押す。結果は数分後に画面へ反映される。
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "何を実行しますか"
+        type: choice
+        default: "バックテスト（条件を指定して試す・約3分）"
+        options:
+          - "バックテスト（条件を指定して試す・約3分）"
+          - "学習サイクル（再検証と原因分析・約10分）"
+          - "今日の判定を更新（約3分）"
+      strategy:
+        description: "【バックテスト】戦略"
+        type: choice
+        default: "pullback 押し目買い"
+        options:
+          - "pullback 押し目買い"
+          - "breakout 高値ブレイク"
+          - "gap_drift 窓開け上昇の追随"
+      params:
+        description: "【バックテスト】変えたい設定（例: rsi_max=10, max_hold=5）。空欄なら現在の設定"
+        type: string
+        default: ""
+      capital:
+        description: "【バックテスト】資金（円）"
+        type: string
+        default: "200000"
+      positions:
+        description: "【バックテスト】同時に持つ銘柄数"
+        type: string
+        default: "2"
+      risk:
+        description: "【バックテスト】1回の損切りで許す損失（資金の何%。0で制限なし）"
+        type: string
+        default: "2"
+      memo:
+        description: "【バックテスト】メモ（何を確かめたいか）"
+        type: string
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+
+      # 10年分の株価は取得に約25分かかるので、前回取得した分を使い回す（週1回の自動実行で新しくなる）
+      - name: 保存済みの株価（10年分）を取り出す
+        if: ${{ !startsWith(inputs.action, '今日の判定') }}
+        id: prices
+        uses: actions/cache/restore@v4
+        with:
+          path: data/cache/prices_bt.parquet
+          key: prices-bt-${{ github.run_id }}
+          restore-keys: prices-bt-
+
+      - name: 株価（10年分）を取得（保存済みが無い場合のみ・約25分）
+        if: ${{ !startsWith(inputs.action, '今日の判定') && hashFiles('data/cache/prices_bt.parquet') == '' }}
+        run: python -m src.data --period 10y --tag bt
+
+      - name: 取得した株価を次回のために保存
+        if: ${{ !startsWith(inputs.action, '今日の判定') && steps.prices.outputs.cache-matched-key == '' }}
+        uses: actions/cache/save@v4
+        with:
+          path: data/cache/prices_bt.parquet
+          key: prices-bt-${{ github.run_id }}
+
+      - name: バックテスト
+        if: ${{ startsWith(inputs.action, 'バックテスト') }}
+        env:   # 入力値はコマンドに直接埋め込まず、環境変数で渡す
+          BT_STRATEGY: ${{ inputs.strategy }}
+          BT_PARAMS: ${{ inputs.params }}
+          BT_CAPITAL: ${{ inputs.capital }}
+          BT_POSITIONS: ${{ inputs.positions }}
+          BT_RISK: ${{ inputs.risk }}
+          BT_MEMO: ${{ inputs.memo }}
+        run: python -m src.manual
+
+      - name: 学習サイクル（検証 → 原因分析 → 改善案の採点 → 学習ノート）
+        if: ${{ startsWith(inputs.action, '学習サイクル') }}
+        run: |
+          python -m src.research
+          python -m src.learn
+
+      - name: 今日の判定を更新
+        if: ${{ !startsWith(inputs.action, 'バックテスト') }}
+        run: |
+          python -m src.data --period 2y --tag daily
+          python -m src.daily
+
+      - name: 結果を保存
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/data config
+          git diff --cached --quiet || git commit -m "手動実行の結果を反映 $(date -u +%Y-%m-%d)"
+          git pull --rebase
+          git push

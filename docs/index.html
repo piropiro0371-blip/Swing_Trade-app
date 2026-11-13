@@ -49,6 +49,7 @@ form.h{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap
 label{font-size:12px;color:var(--sub);display:block}
 input,select,button.b{font:inherit;width:100%;padding:7px 8px;border:1px solid var(--line);border-radius:7px;background:var(--card);color:var(--ink)}
 button.b{background:var(--accent);color:#fff;border-color:var(--accent);cursor:pointer;font-weight:600}
+a.b{background:var(--accent);color:#fff;border-radius:7px;font-weight:600}
 button.x{background:none;border:0;color:var(--sub);cursor:pointer;font-size:16px}
 svg{width:100%;height:auto;display:block}
 footer{max-width:1080px;margin:0 auto;padding:6px 16px 30px;color:var(--sub);font-size:12px}
@@ -65,6 +66,7 @@ footer{max-width:1080px;margin:0 auto;padding:6px 16px 30px;color:var(--sub);fon
   <button data-t="fwd">フォワードテスト</button>
   <button data-t="bt">バックテスト</button>
   <button data-t="learn">学習</button>
+  <button data-t="manual">手動実行</button>
   <button data-t="rule">ルール</button>
 </nav>
 <main>
@@ -73,6 +75,7 @@ footer{max-width:1080px;margin:0 auto;padding:6px 16px 30px;color:var(--sub);fon
   <section id="fwd"></section>
   <section id="bt"></section>
   <section id="learn"></section>
+  <section id="manual"></section>
   <section id="rule"></section>
 </main>
 <footer>
@@ -93,7 +96,7 @@ document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
   document.querySelectorAll("section").forEach(s => s.classList.toggle("on", s.id === b.dataset.t));
 });
 
-let T = null, V = null, Q = null, D = null, J = null, HY = null;
+let T = null, V = null, Q = null, D = null, J = null, HY = null, M = null;
 const stageBadge = s => `<span class="badge ${s.adopted?"ok":"warn"}">${esc(s.stage || (s.adopted?"採用中":"検証中"))}${s.adopted?"":"（参考）"}</span>`;
 const sidOf = s => s.id || s.name;
 
@@ -325,6 +328,77 @@ function renderLearn(){
   el.innerHTML = h;
 }
 
+function formUrl(){
+  // 公開ページのアドレス（https://ユーザー名.github.io/リポジトリ名/）から、GitHubの実行フォームの場所を組み立てる
+  const m = location.hostname.match(/^(.+)\.github\.io$/), repo = location.pathname.split("/")[1];
+  return m && repo ? `https://github.com/${m[1]}/${repo}/actions/workflows/manual.yml` : null;
+}
+
+function renderManual(){
+  const el = $("#manual"), url = formUrl();
+  const fmtv = v => typeof v === "boolean" ? String(v) : v;
+  let h = `<div class="card"><h2>手動で実行する</h2>
+    <div>バックテスト・学習サイクル・今日の判定の更新を、好きなときに実行できます。計算はGitHubのサーバーで行われ、数分後にこのページへ結果が反映されます。</div>
+    <ul class="plain">
+      <li>下のボタンで実行フォームを開く（GitHubにサインインした状態で）</li>
+      <li>右側の「Run workflow」を押し、「何を実行しますか」を選ぶ</li>
+      <li>バックテストの場合は、戦略と変えたい設定を入力する</li>
+      <li>緑の「Run workflow」を押す。終わったらこのページを再読み込みする</li>
+    </ul>
+    ${url ? `<p><a class="b" style="display:inline-block;width:auto;padding:9px 18px;text-decoration:none" href="${esc(url)}" target="_blank" rel="noopener">実行フォームを開く</a></p>`
+          : `<div class="note">実行フォームは、公開ページ（github.io）から開いたときにボタンが表示されます。</div>`}
+    <div class="tw"><table><tr><th class="l">実行できること</th><th class="l">中身</th><th>目安</th><th class="l">結果が出る場所</th></tr>
+      <tr><td>バックテスト</td><td class="name">戦略と設定値を自分で指定し、過去10年で試す</td><td>約3分</td><td class="l">このタブの下</td></tr>
+      <tr><td>学習サイクル</td><td class="name">全設定の再検証 → 負けの原因分析 → 改善案の採点 → 学習ノートに記録</td><td>約10分</td><td class="l">バックテスト・学習タブ</td></tr>
+      <tr><td>今日の判定を更新</td><td class="name">最新の株価で買い候補とフォワードテストを更新</td><td>約3分</td><td class="l">今日の判定タブ</td></tr>
+    </table></div>
+    <div class="note">初回や、保存済みの株価データが消えた後は、10年分の取得のために約25分余計にかかります。手動のバックテストは参考で、戦略の採用・不採用には影響しません。試した回数は「試した仮説の数」に加算されます（何度も試すと、偶然良い結果が出やすくなるためです）。</div></div>`;
+
+  if (M && M.strategies) {
+    h += `<div class="card"><h2>バックテストで変えられる設定</h2>
+      <div class="note">「変えたい設定」の欄に <b>項目=値</b> の形で、カンマ区切りで入力します（例：rsi_max=10, max_hold=5）。書かなかった項目は現在の値のままです。</div>`;
+    for (const [k, s] of Object.entries(M.strategies)) {
+      h += `<h3>${esc(s.label)}（${esc(k)}）</h3><div class="tw"><table><tr><th class="l">項目</th><th>現在の値</th><th class="l">意味</th></tr>
+        ${Object.entries(s.defaults).map(([n, v]) => `<tr><td>${esc(n)}</td><td>${esc(fmtv(v))}</td><td class="name">${esc(M.param_help[n] || "")}</td></tr>`).join("")}</table></div>`;
+    }
+    h += `</div>`;
+  }
+
+  if (M && M.runs && M.runs.length) {
+    for (const r of M.runs) {
+      const i = r.in_sample, o = r.out_sample, pf = r.portfolio;
+      const row = (n, x) => x && x.n ? `<tr><td>${n}</td><td>${x.n}</td><td>${(x.win_rate*100).toFixed(0)}%</td><td>${frac(x.avg_ret)}</td><td>${frac(x.avg_excess)}</td><td>${x.t_excess.toFixed(2)}</td><td>${x.profit_factor == null ? "–" : x.profit_factor.toFixed(2)}</td><td>${x.avg_hold.toFixed(1)}日</td></tr>` : `<tr><td>${n}</td><td>0</td><td colspan="6" class="l">取引なし</td></tr>`;
+      const ch = Object.keys(r.changed || {});
+      const names = {c1: "学習期間で統計的に確か", c2: "検証期間でも市場平均超え", c3: "7割以上の年でプラス", c5: "資産推移がプラスで下落25%以内"};
+      h += `<div class="card"><h2>${esc(r.label)} <span class="badge">${esc(r.run_at)}</span></h2>
+        ${r.memo ? `<div>${esc(r.memo)}</div>` : ""}
+        <div class="note">設定：${Object.entries(r.params).map(([k, v]) => `${ch.includes(k) ? "<b>" : ""}${esc(k)}=${esc(fmtv(v))}${ch.includes(k) ? "</b>" : ""}`).join("、")}
+          ${ch.length ? "（太字が変更した項目）" : "（現在の設定のまま）"}／資金 ${yen(r.capital)}円・同時${r.max_positions}銘柄・損失上限 ${r.risk_pct ? r.risk_pct + "%" : "なし"}</div>
+        <div>${Object.entries(r.checks).map(([k, v]) => `<span class="badge ${v ? "ok" : "ng"}">${esc(names[k] || k)} ${v ? "○" : "×"}</span>`).join(" ")}</div>
+        <div class="tw"><table><tr><th class="l">期間</th><th>取引数</th><th>勝率</th><th>平均損益</th><th>市場平均との差</th><th>t値</th><th>PF</th><th>平均保有</th></tr>
+        ${row("学習期間", i)}${row("検証期間", o)}${row("全期間", r.all)}</table></div>
+        <div class="kpis">
+          <div class="kpi"><b>${frac(pf.all.total_ret, 1)}</b><span>全期間の損益</span></div>
+          <div class="kpi"><b>${frac(pf.all.bench_total_ret, 1)}</b><span>同じ期間のTOPIX</span></div>
+          <div class="kpi"><b>${frac(pf.all.max_dd, 1)}</b><span>最大下落</span></div>
+          <div class="kpi"><b>${frac(pf.all.worst_hit, 1)}</b><span>最悪の1取引（資金比）</span></div>
+          <div class="kpi"><b>${pf.all.trades ?? 0}回</b><span>実際に買えた取引</span></div>
+        </div>
+        ${chart(pf.all.curve, pf.all.bench_curve)}
+        ${r.reasons.length ? `<details><summary class="note" style="cursor:pointer">売った理由の内訳を見る</summary><div class="tw"><table><tr><th class="l">理由</th><th>件数</th><th>割合</th><th>平均損益</th><th>勝率</th></tr>
+          ${r.reasons.map(x => `<tr><td>${esc(x.reason)}</td><td>${x.n}</td><td>${(x.share*100).toFixed(0)}%</td><td>${frac(x.avg_ret)}</td><td>${(x.win_rate*100).toFixed(0)}%</td></tr>`).join("")}</table></div></details>` : ""}
+        ${r.all && r.all.yearly ? `<details><summary class="note" style="cursor:pointer">年ごとの成績を見る</summary><div class="tw"><table><tr><th class="l">年</th>${Object.keys(r.all.yearly).map(y => `<th>${y}</th>`).join("")}</tr>
+          <tr><td>取引数</td>${Object.values(r.all.yearly).map(y => `<td>${y.n}</td>`).join("")}</tr>
+          <tr><td>平均損益</td>${Object.values(r.all.yearly).map(y => `<td>${frac(y.avg_ret)}</td>`).join("")}</tr>
+          <tr><td>市場平均との差</td>${Object.values(r.all.yearly).map(y => `<td>${frac(y.avg_excess)}</td>`).join("")}</tr></table></div></details>` : ""}
+      </div>`;
+    }
+  } else {
+    h += `<div class="card"><div class="note">手動バックテストの結果はまだありません。</div></div>`;
+  }
+  el.innerHTML = h;
+}
+
 /* ---- 保有株（このブラウザの中だけに保存。外部には送信しない） ---- */
 const KEY = "swing_holdings_v1";
 const loadH = () => { try { return JSON.parse(localStorage.getItem(KEY)) || []; } catch { return []; } };
@@ -386,8 +460,8 @@ function renderHold(){
   [T, V] = await Promise.all([get("today.json"), get("validation.json")]);
   if (!T) $("#asof").textContent = "判定データがまだありません";
   renderToday(); renderFwd(); renderBt(); renderRule(); renderHold();
-  [D, J, HY] = await Promise.all([get("diagnosis.json"), get("journal.json"), get("hypotheses.json")]);
-  renderLearn();
+  [D, J, HY, M] = await Promise.all([get("diagnosis.json"), get("journal.json"), get("hypotheses.json"), get("manual.json")]);
+  renderLearn(); renderManual();
   Q = await get("quotes.json"); renderHold();
 })();
 </script>

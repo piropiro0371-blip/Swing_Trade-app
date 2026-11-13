@@ -253,7 +253,8 @@
   "gap_drift|{\"gap\": 0.05, \"max_hold\": 20, \"regime\": true, \"trail_atr\": 3.0, \"vol_mult\": 4.0}|mkt_dist200[0.037,0.089)",
   "gap_drift|{\"gap\": 0.05, \"max_hold\": 20, \"regime\": true, \"trail_atr\": 3.0, \"vol_mult\": 4.0}|mkt_dist200[0.089,None)",
   "gap_drift|{\"gap\": 0.05, \"max_hold\": 20, \"regime\": true, \"trail_atr\": 3.0, \"vol_mult\": 4.0}|mkt_dist200[0.037,None)",
-  "gap_drift|{\"gap\": 0.05, \"max_hold\": 20, \"regime\": true, \"trail_atr\": 3.0, \"vol_mult\": 4.0}|mkt_dist200[None,0.089)"
+  "gap_drift|{\"gap\": 0.05, \"max_hold\": 20, \"regime\": true, \"trail_atr\": 3.0, \"vol_mult\": 4.0}|mkt_dist200[None,0.089)",
+  "pullback|{\"max_hold\": 5, \"regime\": true, \"rsi_max\": 10, \"stop_atr\": 3.0}||manual:200000:2:2.0"
  ],
  "extra_trials": 78,
  "entries": [
@@ -322,7 +323,7 @@
    "result": "損失2%上限を採用"
   }
  ],
- "trials_total": 332,
+ "trials_total": 333,
  "t_required": 3.0,
  "fwd_milestones": {}
 }

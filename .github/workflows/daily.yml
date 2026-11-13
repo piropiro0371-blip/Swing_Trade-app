@@ -45,6 +45,13 @@ jobs:
         if: github.event.schedule == '10 1 * * 6' || inputs.learn
         run: python -m src.data --period 10y --tag bt
 
+      - name: 取得した株価を手動実行のために保存
+        if: github.event.schedule == '10 1 * * 6' || inputs.learn
+        uses: actions/cache/save@v4
+        with:
+          path: data/cache/prices_bt.parquet
+          key: prices-bt-${{ github.run_id }}
+
       - name: 検証（5基準の合否）
         if: github.event.schedule == '10 1 * * 6' || inputs.learn
         run: python -m src.research
@@ -65,4 +72,5 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add docs/data config
           git diff --cached --quiet || git commit -m "判定を更新 $(date -u +%Y-%m-%d)"
+          git pull --rebase
           git push

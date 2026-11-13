@@ -94,7 +94,7 @@ def evaluate(p: Panel, base, cfg: dict, name: str, params: dict, filters: list |
     s_all = stats(tr)
     rp = cfg.get("risk_pct")
     ports = {str(mp): {"oos": portfolio(p, tr, cap, mp, lot, start=oos_start, risk_pct=rp),
-                       "all": portfolio(p, tr, cap, mp, lot, risk_pct=rp)} for mp in (1, 2)}
+                       "all": portfolio(p, tr, cap, mp, lot, risk_pct=rp)} for mp in sorted({1, 2, cfg["max_positions"]})}
     port = ports[str(cfg["max_positions"])]
     yr_ok = s_all["years_pos"] / s_all["years"] if s_all.get("years") else 0.0
     checks = {
