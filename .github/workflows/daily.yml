@@ -1,0 +1,51 @@
+name: 毎日の判定
+
+on:
+  schedule:
+    # 平日 18:10（日本時間）= 09:10 UTC。大引け(15:30)後、株価データが出そろってから実行
+    - cron: "10 9 * * 1-5"
+    # 土曜 10:10（日本時間）に監視銘柄を作り直す
+    - cron: "10 1 * * 6"
+  workflow_dispatch:
+    inputs:
+      refresh_universe:
+        description: "監視銘柄も作り直す"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+
+      - name: 監視銘柄を作り直す（土曜または手動指定時）
+        if: github.event.schedule == '10 1 * * 6' || inputs.refresh_universe
+        run: python -m src.refresh_universe
+
+      - name: 株価を取得（監視銘柄・2年分）
+        run: python -m src.data --period 2y --tag daily
+
+      - name: 判定とフォワードテストの更新
+        run: python -m src.daily
+
+      - name: 結果を保存
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/data config/universe.csv config/all_listed.csv
+          git diff --cached --quiet || git commit -m "判定を更新 $(date -u +%Y-%m-%d)"
+          git push

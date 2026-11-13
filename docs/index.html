@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>スイングトレード判定</title>
+<style>
+:root{
+  --bg:#f6f7f9; --card:#fff; --ink:#1b2430; --sub:#5d6b7c; --line:#dfe4ea;
+  --accent:#1f5fbf; --up:#c0392b; --down:#1e7f4f; --warn:#b7791f; --ok:#1e7f4f; --ng:#c0392b;
+  --chip:#eef2f7;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#12161c; --card:#1b212a; --ink:#e6ebf2; --sub:#9aa7b7; --line:#2c3541;
+    --accent:#6ea8ff; --up:#ff7b6b; --down:#4fd18b; --warn:#f0b849; --ok:#4fd18b; --ng:#ff7b6b; --chip:#252e3a; }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 system-ui,-apple-system,"Segoe UI","Hiragino Sans","Yu Gothic UI",Meiryo,sans-serif}
+header{padding:14px 16px 0;max-width:1080px;margin:0 auto}
+h1{font-size:19px;margin:0 0 2px}
+.sub{color:var(--sub);font-size:13px}
+nav{display:flex;gap:4px;overflow-x:auto;max-width:1080px;margin:10px auto 0;padding:0 16px;border-bottom:1px solid var(--line)}
+nav button{flex:none;background:none;border:0;border-bottom:3px solid transparent;color:var(--sub);font:inherit;padding:9px 12px;cursor:pointer}
+nav button[aria-selected=true]{color:var(--accent);border-color:var(--accent);font-weight:600}
+main{max-width:1080px;margin:0 auto;padding:16px}
+section{display:none} section.on{display:block}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:14px}
+.card h2{font-size:16px;margin:0 0 8px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.card h3{font-size:14px;margin:14px 0 6px}
+.badge{font-size:12px;font-weight:600;padding:2px 9px;border-radius:99px;background:var(--chip);color:var(--sub);white-space:nowrap}
+.badge.ok{color:var(--ok)} .badge.ng{color:var(--ng)} .badge.warn{color:var(--warn)}
+.verdict{font-size:16px;font-weight:700;margin:2px 0 6px}
+.verdict.ok{color:var(--ok)} .verdict.ng{color:var(--ng)} .verdict.warn{color:var(--warn)}
+.tw{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+th{color:var(--sub);font-weight:600;font-size:12px}
+th:first-child,td:first-child,td.l,th.l{text-align:left}
+td.name{white-space:normal;min-width:9em;text-align:left}
+.pos{color:var(--up)} .neg{color:var(--down)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin:8px 0}
+.kpi{background:var(--chip);border-radius:8px;padding:8px 10px}
+.kpi b{display:block;font-size:17px}
+.kpi span{font-size:12px;color:var(--sub)}
+.note{font-size:13px;color:var(--sub);margin:6px 0 0}
+ul.plain{margin:6px 0;padding-left:1.2em}
+form.h{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;align-items:end}
+label{font-size:12px;color:var(--sub);display:block}
+input,select,button.b{font:inherit;width:100%;padding:7px 8px;border:1px solid var(--line);border-radius:7px;background:var(--card);color:var(--ink)}
+button.b{background:var(--accent);color:#fff;border-color:var(--accent);cursor:pointer;font-weight:600}
+button.x{background:none;border:0;color:var(--sub);cursor:pointer;font-size:16px}
+svg{width:100%;height:auto;display:block}
+footer{max-width:1080px;margin:0 auto;padding:6px 16px 30px;color:var(--sub);font-size:12px}
+</style>
+</head>
+<body>
+<header>
+  <h1>スイングトレード判定</h1>
+  <div class="sub" id="asof">読み込み中…</div>
+</header>
+<nav role="tablist">
+  <button data-t="today" aria-selected="true">今日の判定</button>
+  <button data-t="hold">保有株の売り判定</button>
+  <button data-t="fwd">フォワードテスト</button>
+  <button data-t="bt">バックテスト</button>
+  <button data-t="rule">ルール</button>
+</nav>
+<main>
+  <section id="today" class="on"></section>
+  <section id="hold"></section>
+  <section id="fwd"></section>
+  <section id="bt"></section>
+  <section id="rule"></section>
+</main>
+<footer>
+  このページは、あらかじめ決めたルールを機械的に当てはめた結果を表示するもので、利益を保証するものでも、個別の投資助言でもありません。
+  株価データは Yahoo Finance 由来で、誤りや遅れを含むことがあります。売買の最終判断と発注はご自身で行ってください。
+</footer>
+<script>
+const $ = (s, r=document) => r.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const yen = v => v == null ? "–" : Math.round(v).toLocaleString("ja-JP");
+const px = v => v == null ? "–" : Number(v).toLocaleString("ja-JP", {maximumFractionDigits:1});
+const pct = (v, d=2) => v == null ? "–" : `<span class="${v>0?"pos":v<0?"neg":""}">${v>0?"+":""}${Number(v).toFixed(d)}%</span>`;
+const frac = (v, d=2) => v == null ? "–" : pct(v*100, d);
+const get = async f => { try { const r = await fetch(`data/${f}?t=${Date.now()}`); return r.ok ? r.json() : null; } catch { return null; } };
+
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
+  document.querySelectorAll("nav button").forEach(x => x.setAttribute("aria-selected", x === b));
+  document.querySelectorAll("section").forEach(s => s.classList.toggle("on", s.id === b.dataset.t));
+});
+
+let T = null, V = null, Q = null;
+
+function ruleText(s){
+  const p = s.params, e = s.exit, out = {buy:[], sell:[]};
+  if (s.name === "pullback") {
+    out.buy = ["株価が200日移動平均より上、かつ50日移動平均も200日移動平均より上（長期で上昇トレンド）",
+               `2日RSIが${p.rsi_max}未満（短期的に強く売られた）`];
+  } else if (s.name === "breakout") {
+    out.buy = [`終値が過去${p.lookback}日の高値を更新`, `出来高が直近20日平均の${p.vol_mult}倍以上`,
+               "株価が200日移動平均より上", "当日の上昇が+15%未満（上がり過ぎは見送り）"];
+  } else if (s.name === "gap_drift") {
+    out.buy = [`前日終値より${(p.gap*100).toFixed(0)}%以上高く寄り付いた`, "始値より高く、その日の値幅の上側で引けた",
+               `出来高が直近20日平均の${p.vol_mult}倍以上`];
+  }
+  if (p.regime) out.buy.push("TOPIX連動ETFが200日移動平均より上（市場全体が上昇基調）のときだけ買う");
+  out.buy.push("条件を満たした日の翌営業日、寄り付きに成行で買う");
+  out.sell.push(`損切り：買値から「ATR（1日の平均的な値幅）×${e.stop_atr}」下に逆指値を置く`);
+  if (e.trail_atr) out.sell.push(`買った後の終値の最高値から「ATR×${e.trail_atr}」下へ、逆指値を毎日引き上げる（下げることはしない）`);
+  if (e.exit_above_sma) out.sell.push(`終値が${e.exit_above_sma}日移動平均を上回ったら、翌営業日の寄り付きで売る`);
+  out.sell.push(`${e.max_hold}営業日たっても売りの条件に当たらなければ、翌営業日の寄り付きで売る`);
+  return out;
+}
+
+function renderToday(){
+  const el = $("#today");
+  if (!T) { el.innerHTML = `<div class="card">まだ判定データがありません。</div>`; return; }
+  $("#asof").textContent = `${T.date} の大引け時点（更新 ${T.generated}）／資金 ${yen(T.capital)}円・最大${T.max_positions}銘柄`;
+  const adopted = T.strategies.filter(s => s.adopted);
+  const buyable = adopted.filter(s => s.candidates.some(c => c.affordable));
+  let cls, head, body;
+  if (!adopted.length) {
+    cls = "ng"; head = "新規の買いは見送り";
+    body = "バックテストの判定基準にすべて合格した戦略が、現時点ではありません。下に出ている銘柄は「検証中」の戦略による参考シグナルで、実際に買う根拠にはまだなりません。";
+  } else if (!buyable.length) {
+    cls = "warn"; head = "明日の買い候補なし";
+    body = "採用中の戦略の条件を満たす銘柄が、今日はありませんでした。";
+  } else {
+    cls = "ok"; head = "明日の買い候補あり";
+    body = "採用中の戦略が買いシグナルを出しています。順位の高い銘柄から、資金の範囲で検討してください。";
+  }
+  let h = `<div class="card"><div class="verdict ${cls}">${head}</div><div>${body}</div>
+    <div class="kpis">
+      <div class="kpi"><b>${T.regime.up ? "上昇基調" : "下落基調"}</b><span>市場全体（TOPIXが200日平均より${T.regime.up?"上":"下"}）</span></div>
+      <div class="kpi"><b>${pct(T.regime.ret20,1)}</b><span>TOPIX 直近20日の騰落</span></div>
+      <div class="kpi"><b>${T.n_tradable}</b><span>予算内で買える銘柄数</span></div>
+    </div></div>`;
+  for (const s of T.strategies) {
+    const blocked = s.regime_required && !T.regime.up;
+    h += `<div class="card"><h2>${esc(s.label)} <span class="badge ${s.adopted?"ok":"warn"}">${s.adopted?"採用中":"検証中（参考）"}</span>
+      <span class="badge">候補 ${s.n_candidates}銘柄</span></h2>`;
+    if (!s.candidates.length) {
+      h += `<div class="note">${blocked ? "市場全体が下落基調のため、この戦略は買いを出しません。" : "今日は条件を満たす銘柄がありません。"}</div>`;
+    } else {
+      h += `<div class="tw"><table><tr><th>順位</th><th class="l">銘柄</th><th>終値</th><th>前日比</th><th>出来高倍率</th><th>損切り目安</th><th>株数</th><th>必要資金の目安</th></tr>`;
+      for (const c of s.candidates) h += `<tr><td>${c.rank}</td><td class="name"><b>${esc(c.code)}</b> ${esc(c.name)}<br><span class="sub">${esc(c.market)}・${esc(c.sector)}</span></td>
+        <td>${px(c.close)}</td><td>${pct(c.ret1,1)}</td><td>${c.vol_ratio ?? "–"}倍</td><td>${px(c.stop)}<br><span class="sub">${c.stop_pct}%</span></td>
+        <td>${c.affordable ? c.shares : "–"}</td><td>${c.affordable ? yen(c.amount)+"円" : "1銘柄の枠を超過"}</td></tr>`;
+      h += `</table></div><div class="note">買う場合は翌営業日の寄り付きに成行。損切り目安は終値から計算した値で、実際は「買値 − ATR×${s.exit.stop_atr}」に逆指値を置きます。</div>`;
+    }
+    h += `</div>`;
+  }
+  el.innerHTML = h;
+}
+
+function tradeTable(rows, open){
+  if (!rows.length) return `<div class="note">${open ? "仮想で保有中の銘柄はありません。" : "決済済みのトレードはまだありません。"}</div>`;
+  let h = `<div class="tw"><table><tr><th class="l">銘柄</th><th>順位</th><th>買い日</th><th>買値</th>${open?"<th>現在値</th><th>逆指値</th>":"<th>売り日</th><th>売値</th>"}<th>損益</th><th>日数</th><th class="l">${open?"判定":"売った理由"}</th></tr>`;
+  for (const t of rows) h += `<tr><td class="name"><b>${esc(t.code)}</b> ${esc(t.name)}</td><td>${t.rank}</td><td>${t.entry_date.slice(5)}</td><td>${px(t.entry)}</td>
+    ${open ? `<td>${px(t.close)}</td><td>${px(t.stop)}</td>` : `<td>${t.exit_date.slice(5)}</td><td>${px(t.exit)}</td>`}
+    <td>${pct(t.ret)}</td><td>${t.hold}</td><td class="l">${open ? (t.sell_tomorrow ? `<b class="neg">明日の寄りで売り（${esc(t.sell_tomorrow)}）</b>` : "保有継続") : esc(t.reason)}</td></tr>`;
+  return h + `</table></div>`;
+}
+
+function renderFwd(){
+  const el = $("#fwd");
+  if (!T) { el.innerHTML = `<div class="card">データがありません。</div>`; return; }
+  let h = `<div class="card"><h2>フォワードテストとは</h2>
+    <div>${esc(T.forward_start)} 以降に、このシステムが<b>その日の時点で</b>出した買いシグナルを台帳に記録し、ルール通りに売買したと仮定した成績です。
+    過去データへの当てはめ（バックテスト）と違い、後から都合よく調整できないので、ルールが本当に通用するかを確かめる材料になります。
+    「上位のみ」は、資金の都合で実際に買える順位（${T.max_positions}位まで）に絞った成績です。</div></div>`;
+  for (const s of T.strategies) {
+    const a = s.forward.all, t = s.forward.top;
+    const v = V && V.strategies.find(x => x.name === s.name);
+    const k = (o, f) => o && o.n ? f(o) : "–";
+    h += `<div class="card"><h2>${esc(s.label)} <span class="badge ${s.adopted?"ok":"warn"}">${s.adopted?"採用中":"検証中"}</span></h2>
+      <div class="tw"><table><tr><th class="l"></th><th>取引数</th><th>勝率</th><th>平均損益</th><th>市場平均との差</th><th>損益レシオ(PF)</th></tr>
+      <tr><td>フォワード（全シグナル）</td><td>${a.n||0}</td><td>${k(a,o=>(o.win_rate*100).toFixed(0)+"%")}</td><td>${k(a,o=>frac(o.avg_ret))}</td><td>${k(a,o=>frac(o.avg_excess))}</td><td>${k(a,o=>o.profit_factor.toFixed(2))}</td></tr>
+      <tr><td>フォワード（上位のみ）</td><td>${t.n||0}</td><td>${k(t,o=>(o.win_rate*100).toFixed(0)+"%")}</td><td>${k(t,o=>frac(o.avg_ret))}</td><td>${k(t,o=>frac(o.avg_excess))}</td><td>${k(t,o=>o.profit_factor.toFixed(2))}</td></tr>
+      ${v ? `<tr><td>バックテストの期待値</td><td class="sub">${v.all.n}</td><td>${(v.all.win_rate*100).toFixed(0)}%</td><td>${frac(v.all.avg_ret)}</td><td>${frac(v.all.avg_excess)}</td><td>${v.all.profit_factor.toFixed(2)}</td></tr>` : ""}
+      </table></div>
+      ${(a.n||0) < 30 ? `<div class="note">取引数が30件に届くまでは、偶然の影響が大きく成績の良し悪しを判断できません。</div>` : ""}
+      <h3>仮想で保有中</h3>${tradeTable(s.open, true)}
+      <h3>決済済み（新しい順）</h3>${tradeTable(s.closed, false)}</div>`;
+  }
+  el.innerHTML = h;
+}
+
+function chart(curve, bench){
+  if (!curve || curve.length < 2) return "";
+  const W = 720, H = 240, L = 8, R = 8, Tp = 10, B = 22;
+  const all = curve.map(d => d[1]).concat(bench.map(d => d[1]));
+  const lo = Math.min(...all), hi = Math.max(...all);
+  const t0 = Date.parse(curve[0][0]), t1 = Date.parse(curve.at(-1)[0]);
+  const X = d => L + (Date.parse(d) - t0) / (t1 - t0 || 1) * (W - L - R);
+  const Y = v => Tp + (hi - v) / (hi - lo || 1) * (H - Tp - B);
+  const line = a => a.map(d => `${X(d[0]).toFixed(1)},${Y(d[1]).toFixed(1)}`).join(" ");
+  const y0 = +curve[0][0].slice(0,4), y1 = +curve.at(-1)[0].slice(0,4);
+  let ticks = "";
+  for (let y = y0 + 1; y <= y1; y++) { const x = X(`${y}-01-01`); ticks += `<line x1="${x}" x2="${x}" y1="${Tp}" y2="${H-B}" stroke="var(--line)"/><text x="${x+3}" y="${H-6}" font-size="11" fill="var(--sub)">${y}</text>`; }
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="資産推移">${ticks}
+    <polyline fill="none" stroke="var(--sub)" stroke-width="1.5" stroke-dasharray="4 3" points="${line(bench)}"/>
+    <polyline fill="none" stroke="var(--accent)" stroke-width="2" points="${line(curve)}"/></svg>
+    <div class="note"><span style="color:var(--accent)">━</span> この戦略（${yen(curve.at(-1)[1])}円）　<span>┅</span> 同じ金額でTOPIX連動ETFを持ち続けた場合（${yen(bench.at(-1)[1])}円）</div>`;
+}
+
+function renderBt(){
+  const el = $("#bt");
+  if (!V) { el.innerHTML = `<div class="card">検証データがありません。</div>`; return; }
+  const mp = T ? String(T.max_positions) : "2";
+  let h = `<div class="card"><h2>検証の方法</h2>
+    <div>東証上場 ${V.n_codes} 銘柄の日足（${V.period[0]}〜${V.period[1]}）で検証しています。
+    ${esc(V.in_sample_end)} までを<b>学習期間</b>として設定値を選び、それ以降の<b>検証期間</b>（選ぶときに見ていないデータ）で通用するかを確かめます。
+    損益はすべてコスト（往復0.2%）差し引き後。次の5つすべてに合格した戦略だけを「採用」とします。</div>
+    <ul class="plain">${V.criteria.map((c,i) => `<li>基準${i+1}：${esc(c.text)}</li>`).join("")}</ul>
+    <div class="note">注意：現在上場している銘柄だけで検証しているため、過去に上場廃止になった銘柄の損失が含まれず、成績はやや良く出ます。税金は考慮していません。</div></div>`;
+  for (const s of V.strategies) {
+    const i = s.in_sample, o = s.out_sample, pf = s.portfolio[mp] || s.portfolio["2"];
+    const row = (n, x) => `<tr><td>${n}</td><td>${x.n}</td><td>${(x.win_rate*100).toFixed(0)}%</td><td>${frac(x.avg_ret)}</td><td>${frac(x.avg_excess)}</td><td>${x.t_excess.toFixed(2)}</td><td>${x.profit_factor.toFixed(2)}</td><td>${x.avg_hold.toFixed(1)}日</td></tr>`;
+    h += `<div class="card"><h2>${esc(s.label)} <span class="badge ${s.passed?"ok":"ng"}">${s.passed?"合格（採用）":"不合格"}</span></h2>
+      <div>${V.criteria.map((c,k) => `<span class="badge ${s.checks[c.id]?"ok":"ng"}">基準${k+1} ${s.checks[c.id]?"○":"×"}</span>`).join(" ")}</div>
+      <div class="tw"><table><tr><th class="l">期間</th><th>取引数</th><th>勝率</th><th>平均損益</th><th>市場平均との差</th><th>t値</th><th>PF</th><th>平均保有</th></tr>
+      ${row("学習期間", i)}${row("検証期間", o)}</table></div>
+      <div class="kpis">
+        <div class="kpi"><b>${frac(pf.oos.total_ret,1)}</b><span>検証期間の損益（資金${yen(V.capital)}円・${mp}銘柄まで）</span></div>
+        <div class="kpi"><b>${frac(pf.oos.bench_total_ret,1)}</b><span>同じ期間のTOPIX</span></div>
+        <div class="kpi"><b>${frac(pf.oos.max_dd,1)}</b><span>検証期間の最大下落</span></div>
+        <div class="kpi"><b>${s.all.years_pos}/${s.all.years}年</b><span>プラスだった年</span></div>
+        <div class="kpi"><b>${(s.robust*100).toFixed(0)}%</b><span>設定を変えてもプラスの割合</span></div>
+      </div>
+      <h3>資産推移（全期間・資金${yen(V.capital)}円から）</h3>${chart(pf.all.curve, pf.all.bench_curve)}
+      <h3>年ごとの成績（1トレードあたり）</h3>
+      <div class="tw"><table><tr><th class="l">年</th>${Object.keys(s.all.yearly).map(y=>`<th>${y}</th>`).join("")}</tr>
+      <tr><td>取引数</td>${Object.values(s.all.yearly).map(y=>`<td>${y.n}</td>`).join("")}</tr>
+      <tr><td>平均損益</td>${Object.values(s.all.yearly).map(y=>`<td>${frac(y.avg_ret)}</td>`).join("")}</tr>
+      <tr><td>市場平均との差</td>${Object.values(s.all.yearly).map(y=>`<td>${frac(y.avg_excess)}</td>`).join("")}</tr></table></div></div>`;
+  }
+  el.innerHTML = h;
+}
+
+function renderRule(){
+  const el = $("#rule");
+  if (!T) { el.innerHTML = ""; return; }
+  let h = `<div class="card"><h2>毎日の使い方</h2><ul class="plain">
+    <li>平日の夕方に自動更新されます。「今日の判定」で、明日の買い候補と総合判定を確認します。</li>
+    <li>買う場合：翌朝の寄り付きに成行で買い、約定したらすぐ逆指値（損切り）の売り注文を入れます。</li>
+    <li>買ったら「保有株の売り判定」に登録します。毎日、逆指値をいくらに置くか・売るべきかが表示されます。</li>
+    <li>1銘柄に使うのは資金の ${Math.round(100/T.max_positions)}% まで（${yen(T.slot)}円）、同時保有は最大 ${T.max_positions} 銘柄です。</li>
+    <li>設定の変更や検証のやり直しは、Claude に指示してください。</li></ul></div>`;
+  for (const s of T.strategies) {
+    const r = ruleText(s);
+    h += `<div class="card"><h2>${esc(s.label)} <span class="badge ${s.adopted?"ok":"warn"}">${s.adopted?"採用中":"検証中"}</span></h2>
+      <h3>買いの条件（すべて満たしたとき）</h3><ul class="plain">${r.buy.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>
+      <h3>売りの条件（どれか1つに当たったとき）</h3><ul class="plain">${r.sell.map(x=>`<li>${esc(x)}</li>`).join("")}</ul></div>`;
+  }
+  el.innerHTML = h;
+}
+
+/* ---- 保有株（このブラウザの中だけに保存。外部には送信しない） ---- */
+const KEY = "swing_holdings_v1";
+const loadH = () => { try { return JSON.parse(localStorage.getItem(KEY)) || []; } catch { return []; } };
+const saveH = a => { try { localStorage.setItem(KEY, JSON.stringify(a)); } catch {} };
+
+function judge(hd){
+  const s = T && T.strategies.find(x => x.name === hd.strat);
+  const q = Q && Q.q[hd.code];
+  if (!s || !q) return {msg:"この銘柄のデータがありません（監視対象外）", cls:"warn"};
+  const e = s.exit;
+  let idx = Q.dates.findIndex(d => d >= hd.date);
+  const tooOld = hd.date < Q.dates[0];
+  if (idx < 0) return {name:q.n, msg:"買った日以降のデータがまだありません", cls:""};
+  const cl = q.c.slice(idx).filter(v => v != null);
+  const last = cl.at(-1), held = tooOld ? 999 : cl.length;
+  const hi = Math.max(hd.price, ...cl);
+  let stop = hd.price - e.stop_atr * q.a;
+  if (e.trail_atr) stop = Math.max(stop, hi - e.trail_atr * q.a);
+  const pl = (last / hd.price - 1) * 100;
+  const base = {name:q.n, last, stop, pl, held, yen:(last - hd.price) * hd.shares};
+  if (last <= stop) return {...base, msg:"逆指値を割り込み：まだ持っているなら明日の寄りで売り", cls:"ng"};
+  if (e.exit_above_sma && q.s5 != null && last > q.s5) return {...base, msg:"反発を確認：明日の寄りで売り", cls:"ng"};
+  if (held >= e.max_hold) return {...base, msg:"保有期限に到達：明日の寄りで売り", cls:"ng"};
+  return {...base, msg:`保有継続（逆指値を ${px(Math.floor(stop))}円 に置く／期限まであと${e.max_hold - held}営業日）`, cls:"ok"};
+}
+
+function renderHold(){
+  const el = $("#hold");
+  if (!T) { el.innerHTML = `<div class="card">データがありません。</div>`; return; }
+  const hs = loadH();
+  let h = `<div class="card"><h2>保有株を登録</h2>
+    <form class="h" id="hf">
+      <div><label>証券コード</label><input name="code" required maxlength="5" placeholder="例 7203"></div>
+      <div><label>買った日</label><input name="date" type="date" required></div>
+      <div><label>買値（円）</label><input name="price" type="number" step="0.1" min="0" required></div>
+      <div><label>株数</label><input name="shares" type="number" step="1" min="1" value="${T.lot}" required></div>
+      <div><label>使った戦略</label><select name="strat">${T.strategies.map(s=>`<option value="${esc(s.name)}">${esc(s.label)}</option>`).join("")}</select></div>
+      <div><button class="b">登録</button></div>
+    </form>
+    <div class="note">登録内容はこのブラウザの中だけに保存され、外部には送信されません（別の端末には引き継がれません）。</div></div>
+    <div class="card"><h2>売り判定 <span class="badge">${esc(T.date)} 終値時点</span></h2>`;
+  if (!hs.length) h += `<div class="note">登録された保有株はありません。</div>`;
+  else {
+    h += `<div class="tw"><table><tr><th class="l">銘柄</th><th>買値</th><th>現在値</th><th>損益</th><th>評価損益</th><th>日数</th><th class="l">判定</th><th></th></tr>`;
+    hs.forEach((hd, i) => { const j = judge(hd);
+      h += `<tr><td class="name"><b>${esc(hd.code)}</b> ${esc(j.name||"")}<br><span class="sub">${esc(hd.date)}・${hd.shares}株</span></td><td>${px(hd.price)}</td><td>${px(j.last)}</td>
+        <td>${pct(j.pl)}</td><td>${j.yen==null?"–":`<span class="${j.yen>0?"pos":j.yen<0?"neg":""}">${yen(j.yen)}円</span>`}</td><td>${j.held==null||j.held>900?"–":j.held}</td>
+        <td class="l"><b class="badge ${j.cls}">${esc(j.msg)}</b></td><td><button class="x" data-i="${i}" title="削除">✕</button></td></tr>`; });
+    h += `</table></div><div class="note">逆指値は「買値 − ATR×倍率」を初期値とし、終値の最高値に合わせて引き上げた目安です。売ったら ✕ で削除してください。</div>`;
+  }
+  el.innerHTML = h + `</div>`;
+  $("#hf").onsubmit = ev => { ev.preventDefault(); const f = new FormData(ev.target);
+    hs.push({code:String(f.get("code")).trim().toUpperCase(), date:f.get("date"), price:+f.get("price"), shares:+f.get("shares"), strat:f.get("strat")});
+    saveH(hs); renderHold(); };
+  el.querySelectorAll("button.x").forEach(b => b.onclick = () => { hs.splice(+b.dataset.i, 1); saveH(hs); renderHold(); });
+}
+
+(async () => {
+  [T, V] = await Promise.all([get("today.json"), get("validation.json")]);
+  if (!T) $("#asof").textContent = "判定データがまだありません";
+  renderToday(); renderFwd(); renderBt(); renderRule(); renderHold();
+  Q = await get("quotes.json"); renderHold();
+})();
+</script>
+</body>
+</html>
