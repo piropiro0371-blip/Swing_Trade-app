@@ -100,6 +100,7 @@ def run() -> None:
     cfg = load_config()
     cap, lot, cost = cfg["capital"], cfg["lot"], cfg["cost_per_side"]
     slot = cap / cfg["max_positions"]
+    risk_yen = cap * cfg["risk_pct"] if cfg.get("risk_pct") else None   # 1回の損切りで許す損失額
     os.makedirs(DOCS, exist_ok=True)
 
     prices = data.load("daily")
@@ -150,11 +151,16 @@ def run() -> None:
                                           "close": _r(c), "adopted": adopted})
                 seen.add(key)
             if rank <= TOP_N:
-                shares = int(slot // (c * lot)) * lot
+                stop_w = ex.stop_atr * a                      # 買値から損切りまでの値幅（1株あたり）
+                by_slot = int(slot // (c * lot)) * lot        # 1銘柄の枠で買える株数
+                by_risk = int(risk_yen // (stop_w * lot)) * lot if risk_yen and stop_w > 0 else by_slot
+                shares = min(by_slot, by_risk)                # 損切り時の損失が上限に収まる株数
+                skip = "" if shares > 0 else ("1銘柄の枠を超過" if by_slot == 0 else "損失上限を超過")
                 cand_out.append({**info(code), "rank": rank, "close": _r(c), "atr": _r(a, 2),
                                  "stop": _r(c - ex.stop_atr * a), "stop_pct": _r(-ex.stop_atr * a / c * 100),
                                  "shares": shares, "amount": round(shares * c),
-                                 "affordable": shares > 0, "score": _r(float(score.iloc[-1][code]), 2),
+                                 "affordable": shares > 0, "skip": skip,
+                                 "loss_if_stop": round(shares * stop_w), "score": _r(float(score.iloc[-1][code]), 2),
                                  "vol_ratio": _r(float(p.v.iloc[-1][code] / p.vol_avg(20).iloc[-1][code]), 1),
                                  "ret1": _r(float(p.ret(1).iloc[-1][code]) * 100)})
 
@@ -247,7 +253,7 @@ def run() -> None:
     _dump(os.path.join(DOCS, "today.json"), {
         "date": ds, "generated": pd.Timestamp.now(tz="Asia/Tokyo").strftime("%Y-%m-%d %H:%M"),
         "forward_start": ledger["start"], "capital": cap, "max_positions": cfg["max_positions"],
-        "slot": slot, "lot": lot,
+        "slot": slot, "lot": lot, "risk_pct": cfg.get("risk_pct"), "risk_yen": risk_yen,
         "regime": {"up": regime_up, "topix_etf": _r(float(b.iloc[-1])),
                    "sma200": _r(float(b.rolling(200).mean().iloc[-1])),
                    "ret20": _r(float(b.iloc[-1] / b.iloc[-21] - 1) * 100)},

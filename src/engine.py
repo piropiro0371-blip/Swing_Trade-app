@@ -121,6 +121,8 @@ class ExitSpec:
     exit_above_sma: int | None = None  # 終値がこの移動平均を上回ったら売り（押し目買い用）
     exit_below_sma: int | None = None  # 終値がこの移動平均を下回ったら売り（順張り用）
     max_hold: int = 10             # 最大保有日数（営業日）
+    stop_on_close: bool = False    # True: 逆指値注文を使わず、終値が損切りラインを割ったら翌朝の寄り付きで売る
+                                   #       （S株＝1株単位の取引は逆指値注文が使えないため）
 
 
 def simulate(p: Panel, entries: pd.DataFrame, score: pd.DataFrame, ex: ExitSpec,
@@ -166,12 +168,14 @@ def simulate(p: Panel, entries: pd.DataFrame, score: pd.DataFrame, ex: ExitSpec,
                     exit_px, reason, x = ok_, pending, k
                     break
                 held += 1
-                if ok_ <= stop:
-                    exit_px, reason, x = ok_, "損切り(窓)", k
-                    break
-                if lk <= stop:
-                    exit_px, reason, x = stop, "損切り", k
-                    break
+                if not ex.stop_on_close:
+                    if ok_ <= stop:
+                        exit_px, reason, x = ok_, "損切り(窓)", k
+                        break
+                    if lk <= stop:
+                        exit_px, reason, x = stop, "損切り", k
+                        break
+                hit = ex.stop_on_close and ck <= stop
                 if target is not None and hk >= target:
                     exit_px, reason, x = max(ok_, target), "利確", k
                     break
@@ -179,7 +183,9 @@ def simulate(p: Panel, entries: pd.DataFrame, score: pd.DataFrame, ex: ExitSpec,
                     hi_close = ck
                 if ex.trail_atr and a[k] > 0:
                     stop = max(stop, hi_close - ex.trail_atr * a[k])
-                if sa is not None and ck > sa[k]:
+                if hit:
+                    pending = "損切り"
+                elif sa is not None and ck > sa[k]:
                     pending = "反発で売り"
                 elif sb is not None and ck < sb[k]:
                     pending = "トレンド終了"
@@ -195,12 +201,13 @@ def simulate(p: Panel, entries: pd.DataFrame, score: pd.DataFrame, ex: ExitSpec,
             if reason.startswith("損切り") and exit_px >= entry:
                 reason = "逆指値で利益確定"   # 引き上げた逆指値に掛かったが、買値より上で売れた
             busy_until = x
-            rows.append((j, i, e, x, entry, exit_px, held, S[i, j], reason, stop, pending or ""))
+            rows.append((j, i, e, x, entry, exit_px, held, S[i, j], reason, stop, pending or "",
+                         ex.stop_atr * atr / entry))
     if not rows:
         return pd.DataFrame(columns=["code", "signal_date", "entry_date", "exit_date", "entry", "exit",
                                      "hold", "score", "reason", "ret", "mkt", "excess"])
     t = pd.DataFrame(rows, columns=["j", "i", "e", "x", "entry", "exit", "hold", "score", "reason",
-                                    "stop_now", "pending"])
+                                    "stop_now", "pending", "risk"])   # risk: 買値から損切りまでの幅（割合）
     t["code"] = p.codes[t["j"]].to_numpy()
     t["signal_date"] = p.dates[t["i"]].to_numpy()
     t["entry_date"] = p.dates[t["e"]].to_numpy()
@@ -250,7 +257,7 @@ def stats(t: pd.DataFrame) -> dict:
 
 
 def portfolio(p: Panel, t: pd.DataFrame, capital: float, max_positions: int,
-              lot: int = 100, start=None, end=None) -> dict:
+              lot: int = 100, start=None, end=None, risk_pct: float | None = None) -> dict:
     """資金制約つきの資産推移。その日の候補をスコア順に、買える分だけ買う。"""
     if start is not None:
         t = t[t["entry_date"] >= start]
@@ -269,6 +276,7 @@ def portfolio(p: Panel, t: pd.DataFrame, capital: float, max_positions: int,
     open_pos: list[dict] = []
     curve = []
     taken = []
+    hits = []
     for d in dates:
         still = []
         for pos in open_pos:
@@ -285,9 +293,14 @@ def portfolio(p: Panel, t: pd.DataFrame, capital: float, max_positions: int,
                 if row.code in held:
                     continue
                 budget = min(cash, capital_per_slot(cash, open_pos, max_positions, C, d))
+                if risk_pct and row.risk > 0:   # 損切りに掛かったときの損失を、総資産の risk_pct 以内に抑える
+                    equity = cash + sum(x["shares"] * float(C.at[d, x["code"]]) for x in open_pos)
+                    budget = min(budget, equity * risk_pct / row.risk)
                 shares = int(budget // (row.entry * lot)) * lot
                 if shares <= 0:
                     continue
+                eq_now = cash + sum(x["shares"] * float(C.at[d, x["code"]]) for x in open_pos)
+                hits.append(shares * row.entry * row.ret / eq_now)   # この1取引が総資産を何%動かしたか
                 cash -= shares * row.entry
                 pos = {"code": row.code, "shares": shares, "entry": row.entry, "ret": row.ret,
                        "exit_date": row.exit_date}
@@ -310,6 +323,8 @@ def portfolio(p: Panel, t: pd.DataFrame, capital: float, max_positions: int,
         "bench_cagr": float((b.iloc[-1] / b.iloc[0]) ** (1 / yrs) - 1),
         "bench_max_dd": float((b / b.cummax() - 1).min()),
         "win_rate": float(np.mean([x > 0 for x in taken])) if taken else 0.0,
+        "worst_hit": float(min(hits)) if hits else 0.0,          # 1取引で総資産が最も減った割合
+        "avg_loss_hit": float(np.mean([h for h in hits if h < 0])) if any(h < 0 for h in hits) else 0.0,
         "curve": [[d.strftime("%Y-%m-%d"), round(float(v))] for d, v in weekly.items()],
         "bench_curve": [[d.strftime("%Y-%m-%d"), round(float(v / b.iloc[0] * capital))]
                         for d, v in b.resample("W").last().dropna().items()],

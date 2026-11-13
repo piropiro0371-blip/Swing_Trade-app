@@ -92,8 +92,9 @@ def evaluate(p: Panel, base, cfg: dict, name: str, params: dict, filters: list |
     s_is = stats(tr[tr["entry_date"] <= is_end])
     s_oos = stats(tr[tr["entry_date"] >= oos_start])
     s_all = stats(tr)
-    ports = {str(mp): {"oos": portfolio(p, tr, cap, mp, lot, start=oos_start),
-                       "all": portfolio(p, tr, cap, mp, lot)} for mp in (1, 2)}
+    rp = cfg.get("risk_pct")
+    ports = {str(mp): {"oos": portfolio(p, tr, cap, mp, lot, start=oos_start, risk_pct=rp),
+                       "all": portfolio(p, tr, cap, mp, lot, risk_pct=rp)} for mp in (1, 2)}
     port = ports[str(cfg["max_positions"])]
     yr_ok = s_all["years_pos"] / s_all["years"] if s_all.get("years") else 0.0
     checks = {

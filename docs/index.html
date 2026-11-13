@@ -149,11 +149,11 @@ function renderToday(){
     if (!s.candidates.length) {
       h += `<div class="note">${blocked ? "市場全体が下落基調のため、この戦略は買いを出しません。" : "今日は条件を満たす銘柄がありません。"}</div>`;
     } else {
-      h += `<div class="tw"><table><tr><th>順位</th><th class="l">銘柄</th><th>終値</th><th>前日比</th><th>出来高倍率</th><th>損切り目安</th><th>株数</th><th>必要資金の目安</th></tr>`;
+      h += `<div class="tw"><table><tr><th>順位</th><th class="l">銘柄</th><th>終値</th><th>前日比</th><th>出来高倍率</th><th>損切り目安</th><th>株数</th><th>必要資金の目安</th><th>損切り時の損失</th></tr>`;
       for (const c of s.candidates) h += `<tr><td>${c.rank}</td><td class="name"><b>${esc(c.code)}</b> ${esc(c.name)}<br><span class="sub">${esc(c.market)}・${esc(c.sector)}</span></td>
         <td>${px(c.close)}</td><td>${pct(c.ret1,1)}</td><td>${c.vol_ratio ?? "–"}倍</td><td>${px(c.stop)}<br><span class="sub">${c.stop_pct}%</span></td>
-        <td>${c.affordable ? c.shares : "–"}</td><td>${c.affordable ? yen(c.amount)+"円" : "1銘柄の枠を超過"}</td></tr>`;
-      h += `</table></div><div class="note">買う場合は翌営業日の寄り付きに成行。損切り目安は終値から計算した値で、実際は「買値 − ATR×${s.exit.stop_atr}」に逆指値を置きます。</div>`;
+        <td>${c.affordable ? c.shares : "–"}</td><td>${c.affordable ? yen(c.amount)+"円" : `<span class="sub">${esc(c.skip || "1銘柄の枠を超過")}</span>`}</td><td>${c.affordable && c.loss_if_stop != null ? "−"+yen(c.loss_if_stop)+"円" : "–"}</td></tr>`;
+      h += `</table></div><div class="note">買う場合は翌営業日の寄り付きに成行。損切り目安は終値から計算した値で、実際は「買値 − ATR×${s.exit.stop_atr}」に逆指値を置きます。${T.risk_yen ? `株数は、損切りに掛かったときの損失が資金の${(T.risk_pct*100).toFixed(0)}%（${yen(T.risk_yen)}円）以内に収まるように決めています。収まらない銘柄は「損失上限を超過」として見送ります。` : ""}</div>`;
     }
     h += `</div>`;
   }
@@ -256,6 +256,7 @@ function renderRule(){
     <li>買う場合：翌朝の寄り付きに成行で買い、約定したらすぐ逆指値（損切り）の売り注文を入れます。</li>
     <li>買ったら「保有株の売り判定」に登録します。毎日、逆指値をいくらに置くか・売るべきかが表示されます。</li>
     <li>1銘柄に使うのは資金の ${Math.round(100/T.max_positions)}% まで（${yen(T.slot)}円）、同時保有は最大 ${T.max_positions} 銘柄です。</li>
+    ${T.risk_yen ? `<li>1回の損切りで失う金額は資金の ${(T.risk_pct*100).toFixed(0)}%（${yen(T.risk_yen)}円）までに抑えます。値動きが大きく、100株でもこの上限を超える銘柄は買いません。</li>` : ""}
     <li>設定の変更や検証のやり直しは、Claude に指示してください。</li></ul></div>`;
   for (const s of T.strategies) {
     const r = ruleText(s);
