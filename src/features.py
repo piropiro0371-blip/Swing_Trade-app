@@ -10,6 +10,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from . import analysis
 from .engine import BENCH, Panel
 
 
@@ -30,6 +31,12 @@ FEATURES = {
     "mkt_ret20":   ("市場全体の直近20日騰落", "pct", lambda p: _mkt(p) / _mkt(p).shift(20) - 1),
     "mkt_dist200": ("市場全体の200日移動平均からの距離", "pct",
                     lambda p: _mkt(p) / _mkt(p).rolling(200, min_periods=200).mean() - 1),
+    # テクニカル指標（2026-11-13 追加。買いの合図としては優位性なし。過熱を避ける方向に弱い根拠あり）
+    "rsi14":       ("RSI（14日。70超で買われすぎ、30未満で売られすぎとされる）", "num", lambda p: p.rsi(14)),
+    "dev25":       ("25日移動平均からの乖離", "pct", lambda p: analysis.dev(p, 25)),
+    "macd_hist":   ("MACDヒストグラム（株価比。プラスで上向き）", "pct", lambda p: analysis.macd_hist(p)),
+    "bb_pos":      ("ボリンジャーバンド内の位置（+1が上限、-1が下限）", "sig", lambda p: analysis.bb_pos(p)),
+    "hi52":        ("52週高値からの距離", "pct", lambda p: analysis.hi52(p)),
 }
 
 
@@ -72,9 +79,15 @@ def mask(p: Panel, filters: list[dict]) -> np.ndarray:
 def fmt(name: str, v: float) -> str:
     unit = FEATURES[name][1]
     if unit == "pct":
+        if name == "macd_hist":
+            return f"{v * 100:+.2f}%"
         return f"{v * 100:+.1f}%" if name != "atr_pct" else f"{v * 100:.1f}%"
     if unit == "oku":
         return f"{v / 1e8:.1f}億円"
+    if unit == "num":
+        return f"{v:.0f}"
+    if unit == "sig":
+        return f"{v:+.2f}"
     if unit == "yen":
         return f"{v:,.0f}円"
     return f"{v:.1f}倍"
