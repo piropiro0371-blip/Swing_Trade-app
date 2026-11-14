@@ -54,8 +54,16 @@ def load_events(p: Panel) -> pd.DataFrame:
     f["guide_op"] = np.where(f["CurPerType"] == "FY", f["NxFOP"], f["FOP"])
     f["guide_eps"] = np.where(f["CurPerType"] == "FY", f["NxFEPS"], f["FEPS"])
     # 同じ会計年度に対する、前回の会社予想からの変化（上方修正・下方修正）
-    g = f.groupby(["code", "CurFYEn"])
-    prev = g["FOP"].shift(1)
+    # 「前回の予想」= 同じ会計年度について、それより前の時刻に出ていた直近の予想。
+    # 本決算で出る来期予想（NxFOP）は、翌会計年度の最初の予想として扱う。
+    cur = f.loc[f["FOP"].notna(), ["code", "CurFYEn", "ts", "FOP"]]
+    nxt = f.loc[(f["CurPerType"] == "FY") & f["NxFOP"].notna(), ["code", "CurFYEn", "ts", "NxFOP"]].copy()
+    nxt["CurFYEn"] = (pd.to_datetime(nxt["CurFYEn"], errors="coerce") + pd.DateOffset(years=1)).dt.strftime("%Y-%m-%d")
+    hist = pd.concat([cur, nxt.rename(columns={"NxFOP": "FOP"})]).dropna(subset=["CurFYEn"])
+    hist = hist.groupby(["code", "CurFYEn", "ts"], as_index=False)["FOP"].last().sort_values(["code", "CurFYEn", "ts"])
+    hist["prev_fop"] = hist.groupby(["code", "CurFYEn"])["FOP"].shift(1)
+    f = f.merge(hist[["code", "CurFYEn", "ts", "prev_fop"]], on=["code", "CurFYEn", "ts"], how="left")
+    prev = f["prev_fop"]
     f["rev_op"] = np.where((f["CurPerType"] != "FY") & (prev > 0) & (f["FOP"] > 0), f["FOP"] / prev - 1, np.nan)
     # 期末決算: 来期予想 ÷ 今期実績（増益予想か減益予想か）
     f["nx_growth"] = np.where((f["CurPerType"] == "FY") & (f["OP"] > 0) & (f["NxFOP"] > 0),

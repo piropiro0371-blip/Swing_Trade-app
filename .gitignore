@@ -4,3 +4,5 @@ __pycache__/
 .env
 .venv/
 .obsidian/
+# J-Quants由来のデータは再配布しない（個人利用の範囲に留める）
+config/fundamentals.csv
