@@ -330,7 +330,15 @@
   "gap_drift|{\"gap\": 0.05, \"max_hold\": 20, \"regime\": true, \"trail_atr\": 3.0, \"vol_mult\": 4.0}|hi52[-0.016,None)",
   "gap_drift|{\"gap\": 0.05, \"max_hold\": 20, \"regime\": true, \"trail_atr\": 3.0, \"vol_mult\": 4.0}|hi52[-0.12,None)",
   "gap_drift|{\"gap\": 0.05, \"max_hold\": 20, \"regime\": true, \"trail_atr\": 3.0, \"vol_mult\": 4.0}|hi52[None,-0.016)",
-  "pullback|{\"max_hold\": 10, \"regime\": true, \"rsi_max\": 5, \"stop_atr\": 2.0}||manual:200000:2:2.0"
+  "pullback|{\"max_hold\": 10, \"regime\": true, \"rsi_max\": 5, \"stop_atr\": 2.0}||manual:200000:2:2.0",
+  "pullback|{\"max_hold\": 10, \"regime\": true, \"rsi_max\": 5, \"stop_atr\": 3.0}|ret20[None,-0.052)",
+  "pullback|{\"max_hold\": 10, \"regime\": true, \"rsi_max\": 5, \"stop_atr\": 3.0}|ret20[-0.052,0.0068)",
+  "pullback|{\"max_hold\": 10, \"regime\": true, \"rsi_max\": 5, \"stop_atr\": 3.0}|ret20[0.0068,None)",
+  "pullback|{\"max_hold\": 10, \"regime\": true, \"rsi_max\": 5, \"stop_atr\": 3.0}|ret20[-0.052,None)",
+  "pullback|{\"max_hold\": 10, \"regime\": true, \"rsi_max\": 5, \"stop_atr\": 3.0}|ret20[None,0.0068)",
+  "breakout|{\"lookback\": 60, \"max_hold\": 40, \"regime\": false, \"trail_atr\": 2.0, \"vol_mult\": 2.5}|dist200[0.15,0.32)",
+  "breakout|{\"lookback\": 60, \"max_hold\": 40, \"regime\": false, \"trail_atr\": 2.0, \"vol_mult\": 2.5}|dist200[0.32,None)",
+  "breakout|{\"lookback\": 60, \"max_hold\": 40, \"regime\": false, \"trail_atr\": 2.0, \"vol_mult\": 2.5}|dist200[None,0.32)"
  ],
  "extra_trials": 137,
  "entries": [
@@ -462,9 +470,24 @@
     "注意: 14か月分・1つの相場局面だけの結果で、この期間は割安株が買われた時期にあたる。60日の損益は期間が重なるためt値は実際より大きく出ている。10年分のデータでの検証が必要。"
    ],
    "result": "有望・要10年検証"
+  },
+  {
+   "date": "2026-11-14",
+   "kind": "学習",
+   "title": "原因分析と絞り込み条件の探索（新たに8件の仮説を試行）",
+   "body": "各戦略のトレードを15種類の特徴で分解し、絞り込み条件を機械的に作って学習期間で予選、上位0件だけを検証期間で本選にかけた。",
+   "lessons": [
+    "押し目買い: 勝率60%・勝ち1回の平均+2.9%・負け1回の平均-4.0%。この勝ち負けの幅だと損益がゼロになる勝率は59%で、実際の勝率はそれを上回っている。",
+    "押し目買い: 1取引の平均損益+0.12%のうち、市場全体の上げ下げによる分が+0.21%、銘柄選びによる分（市場平均との差）が-0.09%。",
+    "高値ブレイク: 勝率34%・勝ち1回の平均+9.6%・負け1回の平均-5.2%。この勝ち負けの幅だと損益がゼロになる勝率は35%で、実際の勝率がそれを下回っているため、コスト込みで負けている。",
+    "高値ブレイク: 1取引の平均損益-0.17%のうち、市場全体の上げ下げによる分が+0.21%、銘柄選びによる分（市場平均との差）が-0.38%。",
+    "窓開け上昇の追随: 勝率34%・勝ち1回の平均+12.8%・負け1回の平均-6.9%。この勝ち負けの幅だと損益がゼロになる勝率は35%で、実際の勝率がそれを下回っているため、コスト込みで負けている。",
+    "窓開け上昇の追随: 1取引の平均損益-0.26%のうち、市場全体の上げ下げによる分が+0.20%、銘柄選びによる分（市場平均との差）が-0.46%。"
+   ],
+   "result": "本選 0件中 0件合格"
   }
  ],
- "trials_total": 468,
+ "trials_total": 476,
  "t_required": 3.0,
  "fwd_milestones": {}
 }
