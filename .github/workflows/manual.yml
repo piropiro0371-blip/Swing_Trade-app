@@ -52,7 +52,9 @@ concurrency:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    env:
+      HAS_JQUANTS: ${{ secrets.JQUANTS_API_KEY != '' }}   # キーの中身ではなく「登録済みか」だけを見る
+    timeout-minutes: 240
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -99,11 +101,47 @@ jobs:
           python -m src.research
           python -m src.learn
 
+      - name: 株価を取得（監視銘柄・2年分）
+        if: ${{ !startsWith(inputs.action, 'バックテスト') }}
+        run: python -m src.data --period 2y --tag daily
+
+      # --- 割安株の候補づくり（J-QuantsのAPIキーがSecretsに登録されている場合のみ）
+      #     決算データは公開リポジトリに含めず、Actionsのキャッシュにだけ置いて毎日の追加分だけ取得する
+      - name: 保存済みの決算データを取り出す
+        if: ${{ !startsWith(inputs.action, 'バックテスト') && env.HAS_JQUANTS == 'true' }}
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            data/cache/fins.parquet
+            data/cache/fins_done.txt
+          key: fins-${{ github.run_id }}
+          restore-keys: fins-
+
+      - name: 決算データの追加分を取得（初回だけ約1時間半）
+        if: ${{ !startsWith(inputs.action, 'バックテスト') && env.HAS_JQUANTS == 'true' }}
+        continue-on-error: true   # 取得に失敗しても、前回までのデータで判定を続ける
+        env:
+          JQUANTS_API_KEY: ${{ secrets.JQUANTS_API_KEY }}   # キーはこの手順にだけ渡す
+        run: python -m src.jquants
+
+      - name: 決算データを次回のために保存
+        if: ${{ always() && !startsWith(inputs.action, 'バックテスト') && env.HAS_JQUANTS == 'true' && hashFiles('data/cache/fins.parquet') != '' }}
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            data/cache/fins.parquet
+            data/cache/fins_done.txt
+          key: fins-${{ github.run_id }}
+
+      - name: PBRの元データと株式分割の履歴を作る
+        if: ${{ !startsWith(inputs.action, 'バックテスト') && env.HAS_JQUANTS == 'true' && hashFiles('data/cache/fins.parquet') != '' }}
+        run: |
+          python -m src.fundamentals
+          python -m src.splits
+
       - name: 今日の判定を更新
         if: ${{ !startsWith(inputs.action, 'バックテスト') }}
-        run: |
-          python -m src.data --period 2y --tag daily
-          python -m src.daily
+        run: python -m src.daily
 
       - name: 結果を保存
         run: |

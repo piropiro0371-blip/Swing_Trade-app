@@ -62,5 +62,4 @@ def load() -> pd.DataFrame:
 if __name__ == "__main__":
     df = build()
     df.to_csv(OUT, index=False, encoding="utf-8")
-    print(f"{len(df)} 銘柄を保存: {OUT}（開示日の範囲 {df['asof'].min()}〜{df['asof'].max()}）")
-    print(df.describe().loc[["count", "50%"]].to_string())
+    print(f"{len(df)} 銘柄を保存（開示日の範囲 {df['asof'].min()}〜{df['asof'].max()}）")
