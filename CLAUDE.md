@@ -53,6 +53,15 @@
 - 「急騰した銘柄（+10%超の大陽線、窓開け上昇）に飛びつくと、その後5〜20日で市場平均に1%前後負ける」は統計的に明確（t値 −3.5 前後）。
 - 価格と出来高だけを使う単純なルールには優位性が見当たらない。次に試す価値があるのは、決算・業績などの別種のデータ。
 
+## フォワードテスト専用の戦略（割安株・低PBR）
+
+- `src/strategies.py` の `FORWARD_ONLY` に登録した戦略は、検証・学習・手動バックテストの対象外。過去の各時点のPBRを持っていないため。
+- 新しい候補を出せるのは、J-Quantsの決算データがある**このPCだけ**（`毎日の更新.bat`）。GitHub上の自動実行は、台帳に記録済みの銘柄の損益追跡だけを行い、候補は前回このPCで出したものを表示し続ける。
+- 決算データはFreeプランのため約3か月遅れ。正式な合否には10年分（Standardプラン）での検証が必要。
+- **J-Quants由来のデータ（`config/fundamentals.csv`、`data/cache/fins.parquet`）とそこから計算した銘柄ごとのPER・PBRは、公開リポジトリや公開画面に載せない**（個人利用の範囲に留める）。公開してよいのは、選ばれた銘柄と集計した統計だけ。
+- **株式分割の補正を必ず通す**: 株価は過去分も分割後の水準に直されているが、決算の1株あたりの数字は発表時点の株数が基準。`src/splits.py` で基準をそろえないと、分割した銘柄が極端に割安に見える（2026-11-14の調査はこれで水増しされ、11-16に訂正した）。
+- このPCで作業する前に `git pull --rebase` する。GitHub上の自動実行が `docs/data/` を毎日書き換えるため、古い状態で実行すると衝突する。
+
 ## コマンド
 
 ```
@@ -62,6 +71,10 @@ python -m src.learn                           # 学習ループ → diagnosis.js
 python -m src.refresh_universe                # 監視銘柄の作り直し
 python -m src.data --period 2y --tag daily    # 日次用データ取得
 python -m src.daily                           # 今日の判定とフォワードテスト更新
+python -m src.manual --strategy pullback --params "rsi_max=10"   # 手動バックテスト（GitHubの実行フォームからも可）
+python -m src.jquants                         # 決算データの追加取得（APIキーは .env。取得済みの日は飛ばす）
+python -m src.fundamentals                    # PBR等の元データを作り直す（Git管理外）
+python -m src.splits                          # 株式分割の履歴を更新
 ```
 
 - 資金が変わったら `config/strategy.json` の `capital` を変え、`src.research` → `src.refresh_universe` をやり直す。

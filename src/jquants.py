@@ -103,5 +103,5 @@ if __name__ == "__main__":
     from . import data
     today = pd.Timestamp.now().normalize()
     lo, hi = today - pd.DateOffset(years=2) + pd.Timedelta(days=1), today - pd.Timedelta(weeks=12)
-    days = sorted(data.load("bt")["date"].unique())
+    days = sorted(data.load("daily")["date"].unique())   # 毎日更新される株価データの営業日を基準にする
     fetch_fins([pd.Timestamp(d).strftime("%Y-%m-%d") for d in days if lo <= pd.Timestamp(d) <= hi])
