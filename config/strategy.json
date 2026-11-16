@@ -46,6 +46,18 @@
       "id": "gap_drift",
       "label": "窓開け上昇の追随",
       "passed_backtest": false
+    },
+    {
+      "id": "value",
+      "name": "value",
+      "label": "割安株（低PBR）",
+      "params": {
+        "pbr_max": 0.6,
+        "stop_atr": 4.0,
+        "max_hold": 60
+      },
+      "max_signals": 5,
+      "passed_backtest": false
     }
   ]
 }

@@ -108,6 +108,10 @@ function ruleText(s){
   } else if (s.name === "breakout") {
     out.buy = [`終値が過去${p.lookback}日の高値を更新`, `出来高が直近20日平均の${p.vol_mult}倍以上`,
                "株価が200日移動平均より上", "当日の上昇が+15%未満（上がり過ぎは見送り）"];
+  } else if (s.name === "value") {
+    out.buy = [`PBR（株価÷1株純資産）が${p.pbr_max}倍未満`,
+               "株式分割があった銘柄は1株あたりの数字を補正し、それでも異常な値（配当利回り8%超など）の銘柄は除く",
+               "すでに仮想保有中の銘柄は除き、条件に合う銘柄から偏りなく1日最大5銘柄を選ぶ（極端に低い銘柄への偏りを避けるため、順位は無作為）"];
   } else if (s.name === "gap_drift") {
     out.buy = [`前日終値より${(p.gap*100).toFixed(0)}%以上高く寄り付いた`, "始値より高く、その日の値幅の上側で引けた",
                `出来高が直近20日平均の${p.vol_mult}倍以上`];
@@ -149,6 +153,7 @@ function renderToday(){
     const blocked = s.regime_required && !T.regime.up;
     h += `<div class="card"><h2>${esc(s.label)} ${stageBadge(s)}
       <span class="badge">候補 ${s.n_candidates}銘柄</span></h2>`;
+    if (s.forward_only) h += `<div class="note">10年分の検証ができていない、フォワードテスト専用の戦略です。14か月分の調査で有望と出たため、実際の相場で通用するかを記録しています。決算データは約3か月遅れのものを使っており、候補の更新はPCを起動している日だけ行われます${s.cand_date ? `（候補は ${esc(s.cand_date)} 時点）` : ""}。</div>`;
     if (!s.candidates.length) {
       h += `<div class="note">${blocked ? "市場全体が下落基調のため、この戦略は買いを出しません。" : "今日は条件を満たす銘柄がありません。"}</div>`;
     } else {

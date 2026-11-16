@@ -19,10 +19,10 @@ import os
 import numpy as np
 import pandas as pd
 
-from . import data, diagnose, features, journal
+from . import data, diagnose, features, fundamentals, journal
 from .engine import BENCH, Panel, simulate, stats
 from .research import load_config, save_config, sid_of
-from .strategies import LABELS, build_signal
+from .strategies import FORWARD_ONLY, LABELS, build_signal
 from .universe import ROOT, load_all_listed
 
 DOCS = os.path.join(ROOT, "docs", "data")
@@ -118,6 +118,7 @@ def run() -> None:
     close_now = p.c.iloc[-1]
 
     ledger = _load_json(LEDGER, {"start": ds, "signals": []})
+    prev_today = _load_json(os.path.join(DOCS, "today.json"), {})
     seen = {(s["date"], s["code"], s["strategy"]) for s in ledger["signals"]}
 
     def info(code):
@@ -142,6 +143,22 @@ def run() -> None:
         row = sig.iloc[-1]
         codes = row.index[row.to_numpy()]
         cands = sorted(codes, key=lambda c: -float(score.iloc[-1][c]) if np.isfinite(score.iloc[-1][c]) else 0)
+        cand_date, carried = ds, None
+        if name in FORWARD_ONLY:
+            # フォワード専用の戦略: 売買の再現は台帳の記録から行う（決算データが無い環境でも追跡を続けられる）
+            sig = pd.DataFrame(False, index=p.dates, columns=p.codes)
+            for s in ledger["signals"]:
+                d = pd.Timestamp(s["date"])
+                if s["strategy"] == sid and s["code"] in sig.columns and d in sig.index:
+                    sig.at[d, s["code"]] = True
+            if fundamentals.load().empty:
+                # 決算データが無い（GitHub上の自動実行）: 新しい候補は出さず、前回このPCで出した候補を表示し続ける
+                cands = []
+                carried = next((x for x in prev_today.get("strategies", []) if x.get("id") == sid), None)
+            else:
+                held = set(simulate(p, sig, score, ex, cost=cost, include_open=True).query("reason == 'open'")["code"])
+                cands = [c for c in cands if c not in held][: spec.get("max_signals", 5)]   # 保有中を除き、上位だけ記録
+        n_cands = len(cands)
         cand_out = []
         for rank, code in enumerate(cands, 1):
             c, a = float(close_now[code]), float(atr_now[code])
@@ -167,9 +184,11 @@ def run() -> None:
         # --- フォワードテスト: 台帳に載ったシグナルだけをルール通りに売買したと仮定
         tr = simulate(p, sig, score, ex, cost=cost, include_open=True)
         led = {(s["date"], s["code"]): s for s in ledger["signals"] if s["strategy"] == sid}
-        tr["key"] = list(zip(tr["signal_date"].dt.strftime("%Y-%m-%d"), tr["code"]))
+        tr["key"] = list(zip(pd.to_datetime(tr["signal_date"]).dt.strftime("%Y-%m-%d"), tr["code"])) if len(tr) else []
         fwd = tr[tr["key"].isin(led.keys())].copy()
         fwd["rank"] = [led[k]["rank"] for k in fwd["key"]]
+        if carried:
+            cand_out, n_cands, cand_date = carried.get("candidates", []), carried.get("n_candidates", 0), carried.get("cand_date")
         closed = fwd[fwd["reason"] != "open"]
         top = closed[closed["rank"] <= cfg["max_positions"]]
 
@@ -216,12 +235,13 @@ def run() -> None:
                      "exit_above_sma": ex.exit_above_sma, "exit_below_sma": ex.exit_below_sma,
                      "max_hold": ex.max_hold},
             "regime_required": bool(params.get("regime", False)),
-            "n_candidates": len(cands), "candidates": cand_out,
+            "n_candidates": n_cands, "candidates": cand_out,
+            "forward_only": name in FORWARD_ONLY, "cand_date": cand_date,
             "open": open_rows, "closed": closed_rows,
             "forward": {"all": {k: v for k, v in s_all.items() if k != "yearly"},
                         "top": {k: v for k, v in s_top.items() if k != "yearly"}},
         })
-        print(f"[{sid}] {stage} 候補 {len(cands)} / 仮想保有 {len(open_rows)} / 決済済み {len(closed)} / {hl['status']}",
+        print(f"[{sid}] {stage} 候補 {n_cands} / 仮想保有 {len(open_rows)} / 決済済み {len(closed)} / {hl['status']}",
               flush=True)
 
     # --- 昇格・降格を設定ファイルと学習ノートに反映（画面への反映は次回の実行から）
