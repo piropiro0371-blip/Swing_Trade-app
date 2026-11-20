@@ -472,7 +472,7 @@
   "breakout": {
    "label": "高値ブレイク",
    "losses": 9,
-   "closed": 9,
+   "closed": 5,
    "causes": [
     {
      "id": "market",
