@@ -96,6 +96,25 @@ def review(j: dict, sid: str, label: str, n: int, s: dict, bt: dict, hl: dict, d
                 result=hl["status"], date=ds)
 
 
+def drop_incomplete_tail(prices: pd.DataFrame) -> pd.DataFrame:
+    """最新日のデータが一部の銘柄にしか無い日は判定に使わない。
+
+    GitHubの自動実行は混雑で深夜にずれ込むことがあり、その時間帯のYahoo Financeは
+    最新日の出来高が欠けた未確定のデータを返すことがある。そのまま使うと売買代金が
+    計算できず「買える銘柄」が0になり、全戦略の候補が消える（2026-11-17〜20に発生）。
+    """
+    ok = prices[(prices["volume"] > 0) & prices["close"].notna()]
+    counts = ok.groupby("date")["code"].nunique().sort_index()
+    print("最新5日の、出来高がそろった銘柄数: "
+          + ", ".join(f"{d:%m-%d}={n}" for d, n in counts.tail(5).items()), flush=True)
+    while len(counts) > 6 and counts.iloc[-1] < 0.8 * counts.iloc[-6:-1].median():
+        last = counts.index[-1]
+        print(f"{last:%Y-%m-%d} はデータが未確定（{counts.iloc[-1]}銘柄のみ）のため使わない", flush=True)
+        prices = prices[prices["date"] < last]
+        counts = counts.iloc[:-1]
+    return prices
+
+
 def run() -> None:
     cfg = load_config()
     cap, lot, cost = cfg["capital"], cfg["lot"], cfg["cost_per_side"]
@@ -108,6 +127,7 @@ def run() -> None:
     now = pd.Timestamp.now(tz="Asia/Tokyo")
     if now.hour * 60 + now.minute < 15 * 60 + 45:
         prices = prices[prices["date"] < pd.Timestamp(now.date())]
+    prices = drop_incomplete_tail(prices)
     p = Panel(prices)
     today = p.dates[-1]
     ds = today.strftime("%Y-%m-%d")

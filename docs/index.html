@@ -5,54 +5,109 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <title>スイングトレード判定</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Shippori+Mincho+B1:wght@700;800&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#f6f7f9; --card:#fff; --ink:#1b2430; --sub:#5d6b7c; --line:#dfe4ea;
-  --accent:#1f5fbf; --up:#c0392b; --down:#1e7f4f; --warn:#b7791f; --ok:#1e7f4f; --ng:#c0392b;
-  --chip:#eef2f7;
+  --paper:#F2F4EF; --sheet:#FBFCF9; --ink:#1D2A28; --sub:#59675F; --rule:#CFD8D0; --rule2:#93A598;
+  --tint:#E5EBE3; --ai:#2B4C69; --up:#C2362C; --down:#1F7650; --caution:#9A6A0E;
+  --ok:#1F7650; --ng:#B23A2E; --warn:#9A6A0E; --pass:#5B6672;
+  --mincho:"Shippori Mincho B1","Hiragino Mincho ProN","Yu Mincho",serif;
+  --gothic:"BIZ UDPGothic","Hiragino Sans","Yu Gothic UI",Meiryo,system-ui,sans-serif;
 }
+:root{--line:var(--rule);--accent:var(--ai)}   /* グラフ描画が使う名前 */
 @media (prefers-color-scheme: dark){
-  :root{ --bg:#12161c; --card:#1b212a; --ink:#e6ebf2; --sub:#9aa7b7; --line:#2c3541;
-    --accent:#6ea8ff; --up:#ff7b6b; --down:#4fd18b; --warn:#f0b849; --ok:#4fd18b; --ng:#ff7b6b; --chip:#252e3a; }
+  :root{ --paper:#141A19; --sheet:#1A2120; --ink:#E3EAE5; --sub:#9DAAA2; --rule:#2E3936; --rule2:#53645C;
+    --tint:#222B29; --ai:#8DB2D6; --up:#F0786B; --down:#5CC795; --caution:#E1B04F;
+    --ok:#5CC795; --ng:#F0786B; --warn:#E1B04F; --pass:#A9B4C0; }
 }
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 system-ui,-apple-system,"Segoe UI","Hiragino Sans","Yu Gothic UI",Meiryo,sans-serif}
-header{padding:14px 16px 0;max-width:1080px;margin:0 auto}
-h1{font-size:19px;margin:0 0 2px}
+body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.75 var(--gothic)}
+a{color:var(--ai)}
+:focus-visible{outline:2px solid var(--ai);outline-offset:2px}
+body>header{max-width:960px;margin:0 auto;padding:18px 16px 8px;display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 16px}
+h1{font:700 17px/1.4 var(--gothic);margin:0;letter-spacing:.04em}
 .sub{color:var(--sub);font-size:13px}
-nav{display:flex;gap:4px;overflow-x:auto;max-width:1080px;margin:10px auto 0;padding:0 16px;border-bottom:1px solid var(--line)}
-nav button{flex:none;background:none;border:0;border-bottom:3px solid transparent;color:var(--sub);font:inherit;padding:9px 12px;cursor:pointer}
-nav button[aria-selected=true]{color:var(--accent);border-color:var(--accent);font-weight:600}
-main{max-width:1080px;margin:0 auto;padding:16px}
+nav{position:sticky;top:0;z-index:5;background:var(--paper);border-bottom:1px solid var(--rule2)}
+nav .in{display:flex;gap:2px;overflow-x:auto;max-width:960px;margin:0 auto;padding:0 12px;scrollbar-width:none}
+nav button{flex:none;background:none;border:0;border-bottom:3px solid transparent;color:var(--sub);font:inherit;font-size:14px;padding:10px 10px 8px;cursor:pointer}
+nav button:hover{color:var(--ink)}
+nav button[aria-selected=true]{color:var(--ink);border-color:var(--ai);font-weight:700}
+main{max-width:960px;margin:0 auto;padding:12px 16px 20px}
 section{display:none} section.on{display:block}
-.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:14px}
-.card h2{font-size:16px;margin:0 0 8px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-.card h3{font-size:14px;margin:14px 0 6px}
-.badge{font-size:12px;font-weight:600;padding:2px 9px;border-radius:99px;background:var(--chip);color:var(--sub);white-space:nowrap}
-.badge.ok{color:var(--ok)} .badge.ng{color:var(--ng)} .badge.warn{color:var(--warn)}
-.verdict{font-size:16px;font-weight:700;margin:2px 0 6px}
+
+/* 判定札：ページでいちばん目立たせる場所 */
+.board{display:grid;grid-template-columns:auto 1fr;gap:4px 24px;align-items:center;padding:22px 4px 22px;--st:var(--pass)}
+.board.ok{--st:var(--ai)} .board.warn{--st:var(--caution)}
+.seal{width:92px;height:92px;border:3px solid var(--st);border-radius:6px;color:var(--st);display:grid;place-content:center;text-align:center;
+  transform:rotate(-5deg);font-family:var(--mincho);line-height:1.2;box-shadow:inset 0 0 0 3px var(--paper),inset 0 0 0 4px var(--st);
+  animation:stamp .45s cubic-bezier(.2,.9,.3,1.3)}
+.seal b{display:block;font-size:22px;font-weight:800}
+.seal span{display:block;font-size:12px;font-weight:700;letter-spacing:.2em}
+@keyframes stamp{from{transform:rotate(-5deg) scale(1.5);opacity:0}to{transform:rotate(-5deg) scale(1);opacity:1}}
+@media (prefers-reduced-motion: reduce){.seal{animation:none}}
+.vhead{font:800 clamp(26px,6vw,36px)/1.3 var(--mincho);margin:0;letter-spacing:.02em}
+.vbody{margin:8px 0 0;max-width:40em;color:var(--sub)}
+@media (max-width:520px){.board{grid-template-columns:1fr}.seal{width:76px;height:76px;margin-bottom:10px}.seal b{font-size:19px}}
+
+/* 相場の状況（帳簿の1行） */
+.ledger{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-top:3px double var(--rule2);border-bottom:1px solid var(--rule);margin:0 0 28px}
+.ledger div{padding:10px 12px 9px;border-left:1px solid var(--rule)}
+.ledger div:first-child{border-left:0;padding-left:4px}
+.ledger b{display:block;font-size:20px;font-variant-numeric:tabular-nums;line-height:1.4}
+.ledger div>span{font-size:12px;color:var(--sub);line-height:1.5}
+@media (max-width:520px){.ledger div{padding:8px 8px 7px}.ledger b{font-size:17px}}
+
+/* 共通の面 */
+.card{background:var(--sheet);border:1px solid var(--rule);border-radius:6px;padding:18px 18px 16px;margin-bottom:18px}
+.card h2{font:700 19px/1.4 var(--mincho);margin:0 0 10px;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center}
+.card h3{font-size:14px;margin:20px 0 6px}
+.badge{font:700 12px/1.6 var(--gothic);padding:1px 9px;border-radius:3px;border:1px solid var(--rule2);color:var(--sub);white-space:nowrap}
+.badge.ok{color:var(--ok);border-color:currentColor} .badge.ng{color:var(--ng);border-color:currentColor} .badge.warn{color:var(--warn);border-color:currentColor}
+.verdict{font:800 18px/1.4 var(--mincho);margin:2px 0 6px}
 .verdict.ok{color:var(--ok)} .verdict.ng{color:var(--ng)} .verdict.warn{color:var(--warn)}
 .tw{overflow-x:auto}
-table{border-collapse:collapse;width:100%;font-size:14px}
-th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
-th{color:var(--sub);font-weight:600;font-size:12px}
+table{border-collapse:collapse;width:100%;font-size:14px;font-variant-numeric:tabular-nums}
+th,td{padding:7px 8px;border-bottom:1px solid var(--rule);text-align:right;white-space:nowrap}
+th{color:var(--sub);font-weight:700;font-size:12px;border-bottom:3px double var(--rule2)}
 th:first-child,td:first-child,td.l,th.l{text-align:left}
 td.name{white-space:normal;min-width:9em;text-align:left}
 .pos{color:var(--up)} .neg{color:var(--down)}
-.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin:8px 0}
-.kpi{background:var(--chip);border-radius:8px;padding:8px 10px}
-.kpi b{display:block;font-size:17px}
-.kpi span{font-size:12px;color:var(--sub)}
-.note{font-size:13px;color:var(--sub);margin:6px 0 0}
-ul.plain{margin:6px 0;padding-left:1.2em}
-form.h{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;align-items:end}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));border-top:1px solid var(--rule);margin:12px 0}
+.kpi{padding:9px 10px 8px;border-bottom:1px solid var(--rule)}
+.kpi b{display:block;font-size:18px;font-variant-numeric:tabular-nums}
+.kpi>span{font-size:12px;color:var(--sub)}
+.note{font-size:13px;color:var(--sub);margin:8px 0 0;max-width:46em}
+ul.plain{margin:6px 0;padding-left:1.2em} ul.plain li{margin:2px 0}
+details summary{margin-top:10px}
+
+/* 注文メモ：証券会社の注文画面に写す数字 */
+.slips{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:12px;margin-top:12px}
+.slip{border:1px solid var(--rule2);border-radius:6px;background:var(--paper);position:relative}
+.slip .hd{padding:10px 14px 8px;border-bottom:1px dashed var(--rule2)}
+.slip .rk{position:absolute;top:12px;right:14px;font-size:12px;color:var(--sub)}
+.slip .cd{font-size:24px;font-weight:700;letter-spacing:.06em;font-variant-numeric:tabular-nums;margin-right:6px}
+.slip .nm{font-weight:700}
+.slip .mk{display:block;font-size:12px;color:var(--sub)}
+.slip dl{display:grid;grid-template-columns:1fr 1fr;margin:0;padding:6px 14px 10px;gap:0 12px}
+.slip dl div{padding:5px 0;border-bottom:1px solid var(--rule)}
+.slip dl div:nth-last-child(-n+2){border-bottom:0}
+.slip dt{font-size:12px;color:var(--sub)}
+.slip dd{margin:0;font-size:16px;font-weight:700;font-variant-numeric:tabular-nums}
+.slip dd small{font-weight:400;font-size:12px;color:var(--sub);margin-left:4px}
+.slip.off dl{opacity:.55}
+.slip .why{padding:0 14px 10px;font-size:12px;color:var(--caution);font-weight:700}
+.empty{margin:6px 0 0;color:var(--sub)}
+
+form.h{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;align-items:end}
 label{font-size:12px;color:var(--sub);display:block}
-input,select,button.b{font:inherit;width:100%;padding:7px 8px;border:1px solid var(--line);border-radius:7px;background:var(--card);color:var(--ink)}
-button.b{background:var(--accent);color:#fff;border-color:var(--accent);cursor:pointer;font-weight:600}
-a.b{background:var(--accent);color:#fff;border-radius:7px;font-weight:600}
+input,select,button.b{font:inherit;width:100%;padding:7px 9px;border:1px solid var(--rule2);border-radius:4px;background:var(--sheet);color:var(--ink)}
+button.b{background:var(--ai);color:var(--sheet);border-color:var(--ai);cursor:pointer;font-weight:700}
+a.b{background:var(--ai);color:var(--sheet);border-radius:4px;font-weight:700}
 button.x{background:none;border:0;color:var(--sub);cursor:pointer;font-size:16px}
 svg{width:100%;height:auto;display:block}
-footer{max-width:1080px;margin:0 auto;padding:6px 16px 30px;color:var(--sub);font-size:12px}
+footer{max-width:960px;margin:0 auto;padding:8px 16px 36px;color:var(--sub);font-size:12px;line-height:1.8}
 </style>
 </head>
 <body>
@@ -60,7 +115,7 @@ footer{max-width:1080px;margin:0 auto;padding:6px 16px 30px;color:var(--sub);fon
   <h1>スイングトレード判定</h1>
   <div class="sub" id="asof">読み込み中…</div>
 </header>
-<nav role="tablist">
+<nav><div class="in" role="tablist">
   <button data-t="today" aria-selected="true">今日の判定</button>
   <button data-t="hold">保有株の売り判定</button>
   <button data-t="fwd">フォワードテスト</button>
@@ -68,7 +123,7 @@ footer{max-width:1080px;margin:0 auto;padding:6px 16px 30px;color:var(--sub);fon
   <button data-t="learn">学習</button>
   <button data-t="manual">手動実行</button>
   <button data-t="rule">ルール</button>
-</nav>
+</div></nav>
 <main>
   <section id="today" class="on"></section>
   <section id="hold"></section>
@@ -143,25 +198,38 @@ function renderToday(){
     cls = "ok"; head = "明日の買い候補あり";
     body = "採用中の戦略が買いシグナルを出しています。順位の高い銘柄から、資金の範囲で検討してください。";
   }
-  let h = `<div class="card"><div class="verdict ${cls}">${head}</div><div>${body}</div>
-    <div class="kpis">
-      <div class="kpi"><b>${T.regime.up ? "上昇基調" : "下落基調"}</b><span>市場全体（TOPIXが200日平均より${T.regime.up?"上":"下"}）</span></div>
-      <div class="kpi"><b>${pct(T.regime.ret20,1)}</b><span>TOPIX 直近20日の騰落</span></div>
-      <div class="kpi"><b>${T.n_tradable}</b><span>予算内で買える銘柄数</span></div>
-    </div></div>`;
+  const seal = {ok:"買い", warn:"候補なし", ng:"見送り"}[cls];
+  let h = `<div class="board ${cls}" role="status">
+      <div class="seal" aria-hidden="true"><span>判定</span><b>${seal}</b><span>${esc(T.date.slice(5).replace("-", "/"))}</span></div>
+      <div><p class="vhead">${head}</p><p class="vbody">${body}</p></div>
+    </div>
+    <div class="ledger">
+      <div><b>${T.regime.up ? "上昇基調" : "下落基調"}</b><span>市場全体（TOPIXが200日平均より${T.regime.up?"上":"下"}）</span></div>
+      <div><b>${pct(T.regime.ret20,1)}</b><span>TOPIX 直近20日の騰落</span></div>
+      <div><b>${T.n_tradable}</b><span>予算内で買える銘柄数</span></div>
+    </div>`;
   for (const s of T.strategies) {
     const blocked = s.regime_required && !T.regime.up;
     h += `<div class="card"><h2>${esc(s.label)} ${stageBadge(s)}
       <span class="badge">候補 ${s.n_candidates}銘柄</span></h2>`;
-    if (s.forward_only) h += `<div class="note">10年分の検証ができていない、フォワードテスト専用の戦略です。14か月分の調査で有望と出たため、実際の相場で通用するかを記録しています。決算データは約3か月遅れのものを使っており、候補の更新はPCを起動している日だけ行われます${s.cand_date ? `（候補は ${esc(s.cand_date)} 時点）` : ""}。</div>`;
+    if (s.forward_only) h += `<div class="note">10年分の検証ができていない、フォワードテスト専用の戦略です。14か月分の調査で有望と出たため、実際の相場で通用するかを記録しています。決算データは約3か月遅れのものを使っています${s.cand_date ? `（候補は ${esc(s.cand_date)} 時点）` : ""}。</div>`;
     if (!s.candidates.length) {
-      h += `<div class="note">${blocked ? "市場全体が下落基調のため、この戦略は買いを出しません。" : "今日は条件を満たす銘柄がありません。"}</div>`;
+      h += `<p class="empty">${blocked ? "市場全体が下落基調のため、この戦略は買いを出しません。" : "今日は条件を満たす銘柄がありません。"}</p>`;
     } else {
-      h += `<div class="tw"><table><tr><th>順位</th><th class="l">銘柄</th><th>終値</th><th>前日比</th><th>出来高倍率</th><th>損切り目安</th><th>株数</th><th>必要資金の目安</th><th>損切り時の損失</th></tr>`;
-      for (const c of s.candidates) h += `<tr><td>${c.rank}</td><td class="name"><b>${esc(c.code)}</b> ${esc(c.name)}<br><span class="sub">${esc(c.market)}・${esc(c.sector)}</span></td>
-        <td>${px(c.close)}</td><td>${pct(c.ret1,1)}</td><td>${c.vol_ratio ?? "–"}倍</td><td>${px(c.stop)}<br><span class="sub">${c.stop_pct}%</span></td>
-        <td>${c.affordable ? c.shares : "–"}</td><td>${c.affordable ? yen(c.amount)+"円" : `<span class="sub">${esc(c.skip || "1銘柄の枠を超過")}</span>`}</td><td>${c.affordable && c.loss_if_stop != null ? "−"+yen(c.loss_if_stop)+"円" : "–"}</td></tr>`;
-      h += `</table></div><div class="note">買う場合は翌営業日の寄り付きに成行。損切り目安は終値から計算した値で、実際は「買値 − ATR×${s.exit.stop_atr}」に逆指値を置きます。${T.risk_yen ? `株数は、損切りに掛かったときの損失が資金の${(T.risk_pct*100).toFixed(0)}%（${yen(T.risk_yen)}円）以内に収まるように決めています。収まらない銘柄は「損失上限を超過」として見送ります。` : ""}</div>`;
+      h += `<div class="slips">` + s.candidates.map(c => `<article class="slip${c.affordable ? "" : " off"}">
+        <div class="hd"><span class="rk">${c.rank}位</span><span class="cd">${esc(c.code)}</span><span class="nm">${esc(c.name)}</span>
+          <span class="mk">${esc(c.market)}・${esc(c.sector)}</span></div>
+        <dl>
+          <div><dt>終値</dt><dd>${px(c.close)}<small>${pct(c.ret1,1)}</small></dd></div>
+          <div><dt>株数</dt><dd>${c.affordable ? `${c.shares}株` : "–"}</dd></div>
+          <div><dt>逆指値の目安</dt><dd>${px(c.stop)}<small>${esc(c.stop_pct)}%</small></dd></div>
+          <div><dt>必要資金の目安</dt><dd>${c.affordable ? yen(c.amount)+"円" : "–"}</dd></div>
+          <div><dt>損切り時の損失</dt><dd>${c.affordable && c.loss_if_stop != null ? "−"+yen(c.loss_if_stop)+"円" : "–"}</dd></div>
+          <div><dt>出来高（20日平均比）</dt><dd>${c.vol_ratio ?? "–"}<small>倍</small></dd></div>
+        </dl>
+        ${c.affordable ? "" : `<div class="why">見送り：${esc(c.skip || "1銘柄の枠を超過")}</div>`}
+      </article>`).join("") + `</div>`;
+      h += `<div class="note">買う場合は翌営業日の寄り付きに成行。逆指値の目安は終値から計算した値で、実際は「買値 − ATR×${s.exit.stop_atr}」に置きます。${T.risk_yen ? `株数は、損切りに掛かったときの損失が資金の${(T.risk_pct*100).toFixed(0)}%（${yen(T.risk_yen)}円）以内に収まるように決めています。` : ""}</div>`;
     }
     h += `</div>`;
   }
