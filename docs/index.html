@@ -151,7 +151,7 @@ document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
   document.querySelectorAll("section").forEach(s => s.classList.toggle("on", s.id === b.dataset.t));
 });
 
-let T = null, V = null, Q = null, D = null, J = null, HY = null, M = null;
+let T = null, V = null, Q = null, D = null, J = null, HY = null, M = null, PM = null;
 const stageBadge = s => `<span class="badge ${s.adopted?"ok":"warn"}">${esc(s.stage || (s.adopted?"採用中":"検証中"))}${s.adopted?"":"（参考）"}</span>`;
 const sidOf = s => s.id || s.name;
 
@@ -245,6 +245,24 @@ function tradeTable(rows, open){
   return h + `</table></div>`;
 }
 
+function pmBlock(s){
+  const m = s.postmortem;
+  if (!m || !m.losses) return "";
+  const cases = PM ? PM.cases.filter(c => c.strategy === sidOf(s)).slice(-10).reverse() : [];
+  const sign = v => `${v > 0 ? "+" : ""}${(v * 100).toFixed(1)}%`;
+  let h = `<h3>負けの事後検証（負け ${m.losses}件／決済 ${m.closed}件）</h3>
+    <div>${m.causes.map(c => `<span class="badge">${esc(c.text)} ${c.n}件</span>`).join(" ")}</div>
+    <div class="note">バックテストで「成績が悪い」と分かっていた状態に当たっていた負け：${m.known_weak}件。
+      負けが10件たまると、負けやすい状態に偏りがないかを調べ、明確なものは研究リストに仮説として登録します（ルールは変えません）。
+      ${m.registered && m.registered.length ? `<b>今回登録：${m.registered.map(esc).join("、")}</b>` : ""}</div>`;
+  if (cases.length) h += `<details><summary class="note" style="cursor:pointer">負けトレードごとの分析を見る（新しい順に${cases.length}件）</summary>
+    <div class="tw"><table><tr><th class="l">銘柄</th><th>売り日</th><th>損益</th><th>市場</th><th>最大含み益</th><th class="l">原因と所見</th></tr>
+    ${cases.map(c => `<tr><td>${esc(c.code)}</td><td>${esc(c.exit_date.slice(5))}</td><td>${pct(c.ret * 100, 1)}</td><td>${pct(c.mkt * 100, 1)}</td><td>${sign(c.mfe)}</td>
+      <td class="name">${c.cause_text.map(esc).join("／")}${c.weak_spots.length ? `<br><span class="sub">弱点：${c.weak_spots.map(esc).join("／")}</span>` : ""}${c.note ? `<br>${esc(c.note)}` : ""}</td></tr>`).join("")}
+    </table></div></details>`;
+  return h;
+}
+
 function renderFwd(){
   const el = $("#fwd");
   if (!T) { el.innerHTML = `<div class="card">データがありません。</div>`; return; }
@@ -258,13 +276,14 @@ function renderFwd(){
     const k = (o, f) => o && o.n ? f(o) : "–";
     h += `<div class="card"><h2>${esc(s.label)} ${stageBadge(s)}</h2>
       <div class="tw"><table><tr><th class="l"></th><th>取引数</th><th>勝率</th><th>平均損益</th><th>市場平均との差</th><th>損益レシオ(PF)</th></tr>
-      <tr><td>フォワード（全シグナル）</td><td>${a.n||0}</td><td>${k(a,o=>(o.win_rate*100).toFixed(0)+"%")}</td><td>${k(a,o=>frac(o.avg_ret))}</td><td>${k(a,o=>frac(o.avg_excess))}</td><td>${k(a,o=>o.profit_factor.toFixed(2))}</td></tr>
-      <tr><td>フォワード（上位のみ）</td><td>${t.n||0}</td><td>${k(t,o=>(o.win_rate*100).toFixed(0)+"%")}</td><td>${k(t,o=>frac(o.avg_ret))}</td><td>${k(t,o=>frac(o.avg_excess))}</td><td>${k(t,o=>o.profit_factor.toFixed(2))}</td></tr>
+      <tr><td>フォワード（全シグナル）</td><td>${a.n||0}</td><td>${k(a,o=>(o.win_rate*100).toFixed(0)+"%")}</td><td>${k(a,o=>frac(o.avg_ret))}</td><td>${k(a,o=>frac(o.avg_excess))}</td><td>${k(a,o=>o.profit_factor == null ? "–" : o.profit_factor.toFixed(2))}</td></tr>
+      <tr><td>フォワード（上位のみ）</td><td>${t.n||0}</td><td>${k(t,o=>(o.win_rate*100).toFixed(0)+"%")}</td><td>${k(t,o=>frac(o.avg_ret))}</td><td>${k(t,o=>frac(o.avg_excess))}</td><td>${k(t,o=>o.profit_factor == null ? "–" : o.profit_factor.toFixed(2))}</td></tr>
       ${v ? `<tr><td>バックテストの期待値</td><td class="sub">${v.all.n}</td><td>${(v.all.win_rate*100).toFixed(0)}%</td><td>${frac(v.all.avg_ret)}</td><td>${frac(v.all.avg_excess)}</td><td>${v.all.profit_factor.toFixed(2)}</td></tr>` : ""}
       </table></div>
       <div class="note">期待とのずれ：<b>${esc(s.health ? s.health.status : "–")}</b>${s.health && s.health.enough ? `（ずれの大きさ z=${s.health.z}。−2未満なら偶然とは考えにくい不調）` : "　決済30件までは偶然の影響が大きく、良し悪しを判断しません。"}</div>
       ${s.diag && s.diag.reasons.length ? `<h3>売った理由の内訳</h3><div class="tw"><table><tr><th class="l">理由</th><th>件数</th><th>割合</th><th>平均損益</th><th>勝率</th></tr>${s.diag.reasons.map(r=>`<tr><td>${esc(r.reason)}</td><td>${r.n}</td><td>${(r.share*100).toFixed(0)}%</td><td>${frac(r.avg_ret)}</td><td>${(r.win_rate*100).toFixed(0)}%</td></tr>`).join("")}</table></div>` : ""}
       ${s.diag && s.diag.findings.length ? `<ul class="plain">${s.diag.findings.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>` : ""}
+      ${pmBlock(s)}
       <h3>仮想で保有中</h3>${tradeTable(s.open, true)}
       <h3>決済済み（新しい順）</h3>${tradeTable(s.closed, false)}</div>`;
   }
@@ -530,7 +549,7 @@ function renderHold(){
 }
 
 (async () => {
-  [T, V] = await Promise.all([get("today.json"), get("validation.json")]);
+  [T, V, PM] = await Promise.all([get("today.json"), get("validation.json"), get("postmortem.json")]);
   if (!T) $("#asof").textContent = "判定データがまだありません";
   renderToday(); renderFwd(); renderBt(); renderRule(); renderHold();
   [D, J, HY, M] = await Promise.all([get("diagnosis.json"), get("journal.json"), get("hypotheses.json"), get("manual.json")]);

@@ -18,7 +18,7 @@ import os
 
 import pandas as pd
 
-from . import data, diagnose, features, journal
+from . import data, diagnose, features, journal, postmortem
 from .engine import Panel, simulate, stats
 from .research import OUT_WEB, evaluate, load_config, report, save_config, upsert, write_validation
 from .strategies import build_signal, grid
@@ -63,6 +63,8 @@ def run() -> None:
     is_end = pd.Timestamp(cfg["in_sample_end"])
     cost = cfg["cost_per_side"]
     j = journal.load()
+    with open(postmortem.HYP, encoding="utf-8") as f:
+        hy = json.load(f)
     with open(OUT_WEB, encoding="utf-8") as f:
         val = json.load(f)
     bases = [s for s in val["strategies"] if not s.get("filters")]
@@ -94,6 +96,18 @@ def run() -> None:
             keys.append(journal.key(name, params, [f]))
             st = stats(subset(t_is, f))
             cands.append({"feature": feat, "kind": kind, "filter": f, "text": features.describe(f),
+                          "is_n": st.get("n", 0), "is_excess": st.get("avg_excess", 0.0),
+                          "is_t": st.get("t_excess", 0.0), "stage": "予選落ち"})
+        # フォワードの負けの分析（src/postmortem.py）から登録された仮説も、同じ予選・本選にかける。
+        # 予選は学習期間だけで行うので、フォワードで見つけた偏りが10年分でも出るかを確かめることになる
+        for h in hy["items"]:
+            if h.get("source") != "フォワード失敗分析" or h.get("strategy") != name or h.get("status") != "未検証":
+                continue
+            f = h["filter"]
+            keys.append(journal.key(name, params, [f]))
+            st = stats(subset(t_is, f))
+            cands.append({"feature": f["feature"], "kind": f"fwd-{h['id']}", "filter": f,
+                          "text": f"{features.describe(f)}（{h['id']}・フォワードの負けから）", "hyp": h["id"],
                           "is_n": st.get("n", 0), "is_excess": st.get("avg_excess", 0.0),
                           "is_t": st.get("t_excess", 0.0), "stage": "予選落ち"})
         new_total += journal.register(j, keys)
@@ -135,6 +149,18 @@ def run() -> None:
                 if it["name"] == name and it.get("filters") and it["id"] not in live and it.get("passed_backtest"):
                     upsert(cfg, it["id"], name, it["params"], it["filters"], it["label"], False)
 
+        for c in cands:   # フォワード由来の仮説に結果を書き戻す
+            h = next((x for x in hy["items"] if x["id"] == c.get("hyp")), None)
+            if h is None:
+                continue
+            h["status"] = "合格" if c["stage"] == "本選合格" else "不合格"
+            h["result"] = (f"学習期間: 市場平均との差 {c['is_excess']:+.2%}（t{c['is_t']:+.1f}・{c['is_n']}件）→ "
+                           + ("予選落ち（10年分では同じ傾向が出なかった。フォワードの偏りは偶然の可能性が高い）"
+                              if c["stage"] == "予選落ち" else
+                              f"本選 検証期間 {c.get('oos_excess') or 0:+.2%} → {c['stage']}"))
+            h["tested"] = pd.Timestamp.now(tz="Asia/Tokyo").strftime("%Y-%m-%d")
+            lessons.append(f"{h['id']}（フォワードの負けから）: {h['result']}")
+
         diag["strategies"].append({
             "id": name, "label": s["label"], "findings": found, "reasons": reasons,
             "buckets_is": bk_is, "buckets_oos": bk_oos, "edges": edges,
@@ -150,6 +176,8 @@ def run() -> None:
                     f"学習期間で予選、上位{finalists_total}件だけを検証期間で本選にかけた。",
                     lessons[:10], result=f"本選 {finalists_total}件中 {passed_total}件合格")
     journal.save(j)
+    with open(postmortem.HYP, "w", encoding="utf-8") as f:
+        json.dump(hy, f, ensure_ascii=False, indent=1)
     save_config(cfg)
     write_validation(val)
     from .daily import clean_json

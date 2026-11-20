@@ -11,8 +11,8 @@
 | 「新しい売買ルールを試して」「精度を上げて」 | `strategy-researcher` | `src/strategies.py`, `src/research.py` |
 | 「この結果は本物？」「採用していい？」 | `validation-auditor`（読み取り専用） | `docs/data/validation.json`, `data/research/grid.csv` |
 | 「自動更新が止まった」「画面を直して」 | `system-operator` | `src/daily.py`, `docs/index.html`, `.github/workflows/` |
-
 | 「新しい手法を調べて」「テクニックを学習して」 | `technique-scout` | `docs/data/hypotheses.json` |
+| 「負けの原因を調べて」「フォワードの失敗を分析して」 | `forward-analyst` | `docs/data/postmortem.json`, `docs/data/hypotheses.json` |
 
 小さな質問や1ファイルの修正は、振り分けずにメインがそのまま対応してよい。
 
@@ -23,15 +23,17 @@
 | いつ | 何が動くか | 中身 |
 |---|---|---|
 | 毎日（自動） | `src/daily.py` | フォワード成績とバックテスト期待のずれを監視。決済30件以上でプラスなら昇格、期待を大きく下回れば降格。30/60/100件…の節目で振り返りを学習ノートに記録 |
-| 毎週土曜（自動） | `src/research.py` → `src/learn.py` | 10年分で再検証 → トレードを特徴ごとに分解して負けの原因を分析 → 絞り込み案を機械的に作成 → 学習期間で予選 → 上位3案だけ検証期間で本選 → 学習ノートに記録 |
+| 毎日（自動） | `src/postmortem.py` | 新しく決済されたフォワードの負けを1件ずつ原因分類（地合い／銘柄固有／窓開け／買うのが早い／含み益を逃した／値動きなし）し、バックテストで分かっていた弱点に当たっていたかを `postmortem.json` に記録。負け10件以降、負けやすい状態に明確な偏り（z≥3）があれば研究リストに仮説として自動登録 |
+| 毎週土曜（自動） | `src/research.py` → `src/learn.py` | 10年分で再検証 → トレードを特徴ごとに分解して負けの原因を分析 → 絞り込み案を機械的に作成（フォワードの負けから登録された仮説も加える）→ 学習期間で予選 → 上位3案だけ検証期間で本選 → 結果を学習ノートと研究リストに記録 |
 | 「学習サイクルを回して」と言われたとき（Claude） | 下の手順 | 手法の調査と、新しい仮説の実装・検証 |
 
 「学習サイクルを回して」の手順:
-1. `docs/data/journal.json`・`diagnosis.json`・`today.json` を読み、直近の原因分析とフォワードの状況を要約する。
-2. `technique-scout` に手法を調べさせ、研究リスト（`hypotheses.json`）に最大3件追加する。
-3. 研究リストの「未検証」から1〜2件選び、`strategy-researcher` に実装と検証をさせる。
-4. 結果を `hypotheses.json` の `status`・`result` と、学習ノート（`src/journal.py` の `add()`、kind="調査"）に書く。不合格も必ず書く。試した設定は `journal.register()` で数に入れる（学習期間だけの簡易調査は `extra_trials` に加算）。
-5. 合格候補が出たら `validation-auditor` に点検させてから報告する。
+1. `docs/data/journal.json`・`diagnosis.json`・`today.json`・`postmortem.json` を読み、直近の原因分析とフォワードの状況を要約する。
+2. `forward-analyst` に、`note` が空のフォワードの負けを事後検証させる（開示・報道の確認と、共通原因の仮説化）。
+3. `technique-scout` に手法を調べさせ、研究リスト（`hypotheses.json`）に最大3件追加する。
+4. 研究リストの「未検証」から1〜2件選び、`strategy-researcher` に実装と検証をさせる。
+5. 結果を `hypotheses.json` の `status`・`result` と、学習ノート（`src/journal.py` の `add()`、kind="調査"）に書く。不合格も必ず書く。試した設定は `journal.register()` で数に入れる（学習期間だけの簡易調査は `extra_trials` に加算）。
+6. 合格候補が出たら `validation-auditor` に点検させてから報告する。
 
 新しい特徴（原因分析の切り口）を足したいときは `src/features.py` の `FEATURES` に1行足す。学習ループが自動で使う。
 
@@ -42,7 +44,8 @@
 - 新しい仮説は**学習期間（`in_sample_end` まで）だけ**で探す。検証期間の成績を見て設定を選び直さない（見たら、その期間はもう検証に使えない）。
 - 試した仮説の数を報告に必ず書く。たくさん試せば偶然良く見えるものが必ず出る。
 - 成績は必ず「コスト差引後」「市場平均（TOPIX連動ETF 1306）との差」で語る。上昇相場では何を買っても儲かって見えるため。
-- `docs/data/ledger.json`（フォワードテストの台帳）は**追記のみ**。過去の記録を書き換え・削除しない。
+- `docs/data/ledger.json`（フォワードテストの台帳）は**追記のみ**。過去の記録を書き換え・削除しない。`postmortem.json` も追記のみ（`note` 欄の書き足しだけ可）。
+- **フォワードの負けを見てルールを直接直さない**。直すとフォワードテストが「後から合わせた成績」になる。気づいた傾向は研究リストに仮説として登録し、学習期間での予選 → 本選 → フォワード確認の順で採否を決める。
 - 合格した戦略が無いときは、画面に「見送り」と出すのが正しい動作。無理に買い候補を「採用」表示にしない。
 - 利益を保証する表現、「必ず」「確実に」は使わない。
 

@@ -19,7 +19,7 @@ import os
 import numpy as np
 import pandas as pd
 
-from . import data, diagnose, features, fundamentals, journal
+from . import data, diagnose, features, fundamentals, journal, postmortem
 from .engine import BENCH, Panel, simulate, stats
 from .research import load_config, save_config, sid_of
 from .strategies import FORWARD_ONLY, LABELS, build_signal
@@ -152,6 +152,7 @@ def run() -> None:
     val = {s.get("id", s["name"]): s for s in _load_json(os.path.join(DOCS, "validation.json"), {"strategies": []})["strategies"]}
     diag = {s["id"]: s for s in _load_json(os.path.join(DOCS, "diagnosis.json"), {"strategies": []})["strategies"]}
     moves = []   # 昇格・降格（ループの後でまとめて設定に反映）
+    pm = postmortem.load()   # フォワードの負けトレードの逐次分析
     for spec, adopted in entries:
         name, params = spec["name"], spec["params"]
         sid = sid_of(spec)                    # 台帳や画面で戦略を区別する名前
@@ -247,6 +248,8 @@ def run() -> None:
             fdiag["buckets"] = diagnose.buckets(fc, edges)
             fdiag["findings"] = diagnose.findings(label, s_all, fdiag["reasons"], {}, None)
         review(j, sid, label, len(closed), s_all, bt, hl, ds)
+        # --- 新しく決済された負けトレードを1件ずつ分析し、偏りがあれば研究リストに仮説として登録
+        pm_sum = postmortem.run(p, sid, name, label, closed, diag.get(name), name in FORWARD_ONLY, j, ds, pm)
 
         strategies_out.append({
             "id": sid, "name": name, "label": label, "adopted": adopted, "stage": stage, "params": params,
@@ -256,7 +259,7 @@ def run() -> None:
                      "max_hold": ex.max_hold},
             "regime_required": bool(params.get("regime", False)),
             "n_candidates": n_cands, "candidates": cand_out,
-            "forward_only": name in FORWARD_ONLY, "cand_date": cand_date,
+            "forward_only": name in FORWARD_ONLY, "cand_date": cand_date, "postmortem": pm_sum,
             "open": open_rows, "closed": closed_rows,
             "forward": {"all": {k: v for k, v in s_all.items() if k != "yearly"},
                         "top": {k: v for k, v in s_top.items() if k != "yearly"}},
@@ -287,6 +290,7 @@ def run() -> None:
     if moves:
         save_config(cfg)
     journal.save(j)
+    postmortem.save(pm)
     _dump(LEDGER, ledger)
 
     b = p.c[BENCH].dropna()
