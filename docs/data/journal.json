@@ -338,7 +338,37 @@
   "pullback|{\"max_hold\": 10, \"regime\": true, \"rsi_max\": 5, \"stop_atr\": 3.0}|ret20[None,0.0068)",
   "breakout|{\"lookback\": 60, \"max_hold\": 40, \"regime\": false, \"trail_atr\": 2.0, \"vol_mult\": 2.5}|dist200[0.15,0.32)",
   "breakout|{\"lookback\": 60, \"max_hold\": 40, \"regime\": false, \"trail_atr\": 2.0, \"vol_mult\": 2.5}|dist200[0.32,None)",
-  "breakout|{\"lookback\": 60, \"max_hold\": 40, \"regime\": false, \"trail_atr\": 2.0, \"vol_mult\": 2.5}|dist200[None,0.32)"
+  "breakout|{\"lookback\": 60, \"max_hold\": 40, \"regime\": false, \"trail_atr\": 2.0, \"vol_mult\": 2.5}|dist200[None,0.32)",
+  "pullback|{\"max_hold\": 10, \"regime\": true, \"rsi_max\": 5, \"stop_atr\": 3.0}|ret20[-0.052,0.0069)",
+  "pullback|{\"max_hold\": 10, \"regime\": true, \"rsi_max\": 5, \"stop_atr\": 3.0}|ret20[0.0069,None)",
+  "pullback|{\"max_hold\": 10, \"regime\": true, \"rsi_max\": 5, \"stop_atr\": 3.0}|ret20[None,0.0069)",
+  "pullback|{\"max_hold\": 10, \"regime\": true, \"rsi_max\": 5, \"stop_atr\": 3.0}|dist200[None,0.067)",
+  "pullback|{\"max_hold\": 10, \"regime\": true, \"rsi_max\": 5, \"stop_atr\": 3.0}|dist200[0.067,0.17)",
+  "pullback|{\"max_hold\": 10, \"regime\": true, \"rsi_max\": 5, \"stop_atr\": 3.0}|dist200[0.067,None)",
+  "pullback|{\"max_hold\": 10, \"regime\": true, \"rsi_max\": 5, \"stop_atr\": 3.0}|mkt_ret20[None,-0.0053)",
+  "pullback|{\"max_hold\": 10, \"regime\": true, \"rsi_max\": 5, \"stop_atr\": 3.0}|mkt_ret20[-0.0053,0.027)",
+  "pullback|{\"max_hold\": 10, \"regime\": true, \"rsi_max\": 5, \"stop_atr\": 3.0}|mkt_ret20[-0.0053,None)",
+  "pullback|{\"max_hold\": 10, \"regime\": true, \"rsi_max\": 5, \"stop_atr\": 3.0}|mkt_dist200[None,0.037)",
+  "pullback|{\"max_hold\": 10, \"regime\": true, \"rsi_max\": 5, \"stop_atr\": 3.0}|mkt_dist200[0.037,0.091)",
+  "pullback|{\"max_hold\": 10, \"regime\": true, \"rsi_max\": 5, \"stop_atr\": 3.0}|mkt_dist200[0.037,None)",
+  "pullback|{\"max_hold\": 10, \"regime\": true, \"rsi_max\": 5, \"stop_atr\": 3.0}|dev25[None,-0.053)",
+  "pullback|{\"max_hold\": 10, \"regime\": true, \"rsi_max\": 5, \"stop_atr\": 3.0}|dev25[-0.053,-0.018)",
+  "pullback|{\"max_hold\": 10, \"regime\": true, \"rsi_max\": 5, \"stop_atr\": 3.0}|dev25[-0.053,None)",
+  "breakout|{\"lookback\": 60, \"max_hold\": 40, \"regime\": false, \"trail_atr\": 2.0, \"vol_mult\": 2.5}|turnover[100000000.0,290000000.0)",
+  "breakout|{\"lookback\": 60, \"max_hold\": 40, \"regime\": false, \"trail_atr\": 2.0, \"vol_mult\": 2.5}|turnover[290000000.0,None)",
+  "breakout|{\"lookback\": 60, \"max_hold\": 40, \"regime\": false, \"trail_atr\": 2.0, \"vol_mult\": 2.5}|turnover[None,290000000.0)",
+  "breakout|{\"lookback\": 60, \"max_hold\": 40, \"regime\": false, \"trail_atr\": 2.0, \"vol_mult\": 2.5}|price[None,720.0)",
+  "breakout|{\"lookback\": 60, \"max_hold\": 40, \"regime\": false, \"trail_atr\": 2.0, \"vol_mult\": 2.5}|price[720.0,1200.0)",
+  "breakout|{\"lookback\": 60, \"max_hold\": 40, \"regime\": false, \"trail_atr\": 2.0, \"vol_mult\": 2.5}|price[720.0,None)",
+  "breakout|{\"lookback\": 60, \"max_hold\": 40, \"regime\": false, \"trail_atr\": 2.0, \"vol_mult\": 2.5}|mkt_ret20[None,0.0095)",
+  "breakout|{\"lookback\": 60, \"max_hold\": 40, \"regime\": false, \"trail_atr\": 2.0, \"vol_mult\": 2.5}|mkt_ret20[0.0095,0.039)",
+  "breakout|{\"lookback\": 60, \"max_hold\": 40, \"regime\": false, \"trail_atr\": 2.0, \"vol_mult\": 2.5}|mkt_ret20[0.0095,None)",
+  "breakout|{\"lookback\": 60, \"max_hold\": 40, \"regime\": false, \"trail_atr\": 2.0, \"vol_mult\": 2.5}|macd_hist[None,0.0048)",
+  "breakout|{\"lookback\": 60, \"max_hold\": 40, \"regime\": false, \"trail_atr\": 2.0, \"vol_mult\": 2.5}|macd_hist[0.0048,0.01)",
+  "breakout|{\"lookback\": 60, \"max_hold\": 40, \"regime\": false, \"trail_atr\": 2.0, \"vol_mult\": 2.5}|macd_hist[0.0048,None)",
+  "gap_drift|{\"gap\": 0.05, \"max_hold\": 20, \"regime\": true, \"trail_atr\": 3.0, \"vol_mult\": 4.0}|turnover[None,97000000.0)",
+  "gap_drift|{\"gap\": 0.05, \"max_hold\": 20, \"regime\": true, \"trail_atr\": 3.0, \"vol_mult\": 4.0}|turnover[97000000.0,220000000.0)",
+  "gap_drift|{\"gap\": 0.05, \"max_hold\": 20, \"regime\": true, \"trail_atr\": 3.0, \"vol_mult\": 4.0}|turnover[97000000.0,None)"
  ],
  "extra_trials": 152,
  "entries": [
@@ -511,9 +541,24 @@
     "市場の地合いで買いを止める案は、学習ループの自動の絞り込み案（市場全体の直近20日騰落・200日平均からの距離）として毎週検証済みで、これまで本選合格は出ていない。10件が1つの急落局面に集中しているため、今回の件だけで地合いの条件を足さない。"
    ],
    "result": "所見記入"
+  },
+  {
+   "date": "2026-11-21",
+   "kind": "学習",
+   "title": "原因分析と絞り込み条件の探索（新たに30件の仮説を試行）",
+   "body": "各戦略のトレードを15種類の特徴で分解し、絞り込み条件を機械的に作って学習期間で予選、上位0件だけを検証期間で本選にかけた。",
+   "lessons": [
+    "押し目買い: 勝率60%・勝ち1回の平均+2.8%・負け1回の平均-4.0%。この勝ち負けの幅だと損益がゼロになる勝率は59%で、実際の勝率はそれを上回っている。",
+    "押し目買い: 1取引の平均損益+0.11%のうち、市場全体の上げ下げによる分が+0.20%、銘柄選びによる分（市場平均との差）が-0.09%。",
+    "高値ブレイク: 勝率34%・勝ち1回の平均+9.6%・負け1回の平均-5.2%。この勝ち負けの幅だと損益がゼロになる勝率は35%で、実際の勝率がそれを下回っているため、コスト込みで負けている。",
+    "高値ブレイク: 1取引の平均損益-0.17%のうち、市場全体の上げ下げによる分が+0.21%、銘柄選びによる分（市場平均との差）が-0.38%。",
+    "窓開け上昇の追随: 勝率34%・勝ち1回の平均+12.8%・負け1回の平均-6.9%。この勝ち負けの幅だと損益がゼロになる勝率は35%で、実際の勝率がそれを下回っているため、コスト込みで負けている。",
+    "窓開け上昇の追随: 1取引の平均損益-0.27%のうち、市場全体の上げ下げによる分が+0.18%、銘柄選びによる分（市場平均との差）が-0.46%。"
+   ],
+   "result": "本選 0件中 0件合格"
   }
  ],
- "trials_total": 491,
+ "trials_total": 521,
  "t_required": 3.0,
  "fwd_milestones": {}
 }
