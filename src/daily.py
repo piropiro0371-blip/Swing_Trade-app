@@ -19,7 +19,7 @@ import os
 import numpy as np
 import pandas as pd
 
-from . import data, diagnose, features, fundamentals, journal, postmortem
+from . import analysis, data, diagnose, features, fundamentals, journal, postmortem
 from .engine import BENCH, Panel, simulate, stats
 from .research import load_config, save_config, sid_of
 from .strategies import FORWARD_ONLY, LABELS, build_signal
@@ -31,6 +31,7 @@ MIN_FWD = 30        # フォワードの成績を判断するのに必要な決�
 MILESTONES = (30, 60, 100, 150, 200, 300, 500)
 TOP_N = 10         # 画面に出す買い候補の数（戦略ごと）
 QUOTE_DAYS = 60     # 保有株の売り判定用に配る終値の日数
+CHART_DAYS = 120    # 銘柄の詳細に出すローソク足の日数（画面に出てくる銘柄だけ）
 
 
 def _load_json(path, default):
@@ -307,15 +308,36 @@ def run() -> None:
     # --- 保有株の売り判定用: 銘柄ごとの直近の終値・ATR・5日移動平均
     tail = p.c.iloc[-QUOTE_DAYS:]
     sma5 = p.sma(5).iloc[-1]
+    snap = analysis.snapshot(p)   # 銘柄の詳細に出すテクニカル指標（株価と出来高だけから計算。決算データは使わない）
     quotes = {}
     for code in p.codes:
         if code == BENCH or not np.isfinite(close_now[code]):
             continue
         s = tail[code]
-        quotes[code] = {"n": info(code)["name"], "c": [_r(x) for x in s.to_numpy()],
-                        "a": _r(float(atr_now[code]), 2), "s5": _r(float(sma5[code]))}
+        m = info(code)
+        quotes[code] = {"n": m["name"], "m": m["market"], "g": m["sector"], "c": [_r(x) for x in s.to_numpy()],
+                        "a": _r(float(atr_now[code]), 2), "s5": _r(float(sma5[code])),
+                        "k": [_r(float(snap.at[code, k]), 2) for k in analysis.SNAP_COLS]}
     _dump(os.path.join(DOCS, "quotes.json"),
-          {"dates": [d.strftime("%Y-%m-%d") for d in tail.index], "q": quotes})
+          {"dates": [d.strftime("%Y-%m-%d") for d in tail.index], "cols": analysis.SNAP_COLS, "q": quotes})
+
+    # --- 銘柄の詳細に出すローソク足（買い候補・仮想保有・最近の決済・負けの分析に出てくる銘柄だけ）
+    show = []
+    for so in strategies_out:
+        show += [c["code"] for c in so["candidates"]] + [t["code"] for t in so["open"]] + [t["code"] for t in so["closed"][:20]]
+    show += [c["code"] for c in pm["cases"][-20:]]
+    win = slice(-CHART_DAYS, None)
+    s25, s75 = p.sma(25).iloc[win], p.sma(75).iloc[win]
+    charts = {}
+    for code in dict.fromkeys(show):
+        if code not in p.codes:
+            continue
+        charts[code] = {"o": [_r(x) for x in p.o[code].iloc[win]], "h": [_r(x) for x in p.h[code].iloc[win]],
+                        "l": [_r(x) for x in p.l[code].iloc[win]], "c": [_r(x) for x in p.c[code].iloc[win]],
+                        "v": [None if not np.isfinite(x) else int(x) for x in p.v[code].iloc[win]],
+                        "s25": [_r(x) for x in s25[code]], "s75": [_r(x) for x in s75[code]]}
+    _dump(os.path.join(DOCS, "charts.json"),
+          {"dates": [d.strftime("%Y-%m-%d") for d in p.dates[win]], "s": charts})
     print(f"{ds} 分を書き出しました（地合い: {'上昇基調' if regime_up else '下落基調'}）")
 
 

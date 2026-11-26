@@ -107,6 +107,34 @@ button.b{background:var(--ai);color:var(--sheet);border-color:var(--ai);cursor:p
 a.b{background:var(--ai);color:var(--sheet);border-radius:4px;font-weight:700}
 button.x{background:none;border:0;color:var(--sub);cursor:pointer;font-size:16px}
 svg{width:100%;height:auto;display:block}
+
+/* 銘柄の詳細（コードや銘柄名を押すと開く） */
+button.stk{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;text-align:inherit;
+  text-decoration:underline;text-decoration-color:var(--rule2);text-underline-offset:3px}
+button.stk:hover{text-decoration-color:var(--ai);color:var(--ai)}
+dialog#stk{width:min(780px,100vw - 24px);max-height:calc(100vh - 24px);padding:0;border:1px solid var(--rule2);border-radius:8px;
+  background:var(--sheet);color:var(--ink)}
+dialog#stk::backdrop{background:rgba(20,28,26,.45)}
+.sk-hd{position:sticky;top:0;background:var(--sheet);display:flex;gap:4px 14px;align-items:baseline;flex-wrap:wrap;
+  padding:14px 18px 10px;border-bottom:3px double var(--rule2);z-index:1}
+.sk-hd .cd{font-size:26px;font-weight:700;letter-spacing:.06em;font-variant-numeric:tabular-nums}
+.sk-hd .nm{font:700 19px/1.3 var(--mincho)}
+.sk-hd .mk{color:var(--sub);font-size:12px}
+.sk-hd .px{margin-left:auto;font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
+.sk-hd .px small{font-size:13px;margin-left:6px}
+.sk-x{position:absolute;top:10px;right:12px;font:inherit;font-size:13px;background:none;border:1px solid var(--rule2);border-radius:4px;
+  color:var(--sub);padding:2px 10px;cursor:pointer}
+.sk-hd{padding-right:84px}
+.sk-bd{padding:12px 18px 18px}
+.sk-read{font-size:13px;color:var(--sub);font-variant-numeric:tabular-nums;min-height:1.6em}
+.sk-leg{font-size:12px;color:var(--sub);display:flex;gap:4px 14px;flex-wrap:wrap;margin:4px 0 0}
+.sk-leg i{display:inline-block;width:16px;height:0;border-top:2px solid;vertical-align:middle;margin-right:4px}
+.sk-ind{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0 18px;margin:14px 0 0;border-top:1px solid var(--rule)}
+.sk-ind div{padding:8px 0 7px;border-bottom:1px solid var(--rule)}
+.sk-ind dt{font-size:12px;color:var(--sub)}
+.sk-ind dd{margin:0;font-weight:700;font-size:16px;font-variant-numeric:tabular-nums}
+.sk-ind dd small{display:block;font-weight:400;font-size:12px;color:var(--sub);line-height:1.5}
+.sk-links{display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:12px;font-size:13px}
 footer{max-width:960px;margin:0 auto;padding:8px 16px 36px;color:var(--sub);font-size:12px;line-height:1.8}
 </style>
 </head>
@@ -133,6 +161,7 @@ footer{max-width:960px;margin:0 auto;padding:8px 16px 36px;color:var(--sub);font
   <section id="manual"></section>
   <section id="rule"></section>
 </main>
+<dialog id="stk" aria-labelledby="stk-t"></dialog>
 <footer>
   このページは、あらかじめ決めたルールを機械的に当てはめた結果を表示するもので、利益を保証するものでも、個別の投資助言でもありません。
   株価データは Yahoo Finance 由来で、誤りや遅れを含むことがあります。売買の最終判断と発注はご自身で行ってください。
@@ -217,7 +246,7 @@ function renderToday(){
       h += `<p class="empty">${blocked ? "市場全体が下落基調のため、この戦略は買いを出しません。" : "今日は条件を満たす銘柄がありません。"}</p>`;
     } else {
       h += `<div class="slips">` + s.candidates.map(c => `<article class="slip${c.affordable ? "" : " off"}">
-        <div class="hd"><span class="rk">${c.rank}位</span><span class="cd">${esc(c.code)}</span><span class="nm">${esc(c.name)}</span>
+        <div class="hd"><span class="rk">${c.rank}位</span>${stk(c.code, `<span class="cd">${esc(c.code)}</span><span class="nm">${esc(c.name)}</span>`, {stop: c.stop})}
           <span class="mk">${esc(c.market)}・${esc(c.sector)}</span></div>
         <dl>
           <div><dt>終値</dt><dd>${px(c.close)}<small>${pct(c.ret1,1)}</small></dd></div>
@@ -239,7 +268,7 @@ function renderToday(){
 function tradeTable(rows, open){
   if (!rows.length) return `<div class="note">${open ? "仮想で保有中の銘柄はありません。" : "決済済みのトレードはまだありません。"}</div>`;
   let h = `<div class="tw"><table><tr><th class="l">銘柄</th><th>順位</th><th>買い日</th><th>買値</th>${open?"<th>現在値</th><th>逆指値</th>":"<th>売り日</th><th>売値</th>"}<th>損益</th><th>日数</th><th class="l">${open?"判定":"売った理由"}</th></tr>`;
-  for (const t of rows) h += `<tr><td class="name"><b>${esc(t.code)}</b> ${esc(t.name)}</td><td>${t.rank}</td><td>${t.entry_date.slice(5)}</td><td>${px(t.entry)}</td>
+  for (const t of rows) h += `<tr><td class="name">${stk(t.code, `<b>${esc(t.code)}</b> ${esc(t.name)}`, open ? {entry: t.entry, stop: t.stop} : {entry: t.entry})}</td><td>${t.rank}</td><td>${t.entry_date.slice(5)}</td><td>${px(t.entry)}</td>
     ${open ? `<td>${px(t.close)}</td><td>${px(t.stop)}</td>` : `<td>${t.exit_date.slice(5)}</td><td>${px(t.exit)}</td>`}
     <td>${pct(t.ret)}</td><td>${t.hold}</td><td class="l">${open ? (t.sell_tomorrow ? `<b class="neg">明日の寄りで売り（${esc(t.sell_tomorrow)}）</b>` : "保有継続") : esc(t.reason)}</td></tr>`;
   return h + `</table></div>`;
@@ -257,7 +286,7 @@ function pmBlock(s){
       ${m.registered && m.registered.length ? `<b>今回登録：${m.registered.map(esc).join("、")}</b>` : ""}</div>`;
   if (cases.length) h += `<details><summary class="note" style="cursor:pointer">負けトレードごとの分析を見る（新しい順に${cases.length}件）</summary>
     <div class="tw"><table><tr><th class="l">銘柄</th><th>売り日</th><th>損益</th><th>市場</th><th>最大含み益</th><th class="l">原因と所見</th></tr>
-    ${cases.map(c => `<tr><td>${esc(c.code)}</td><td>${esc(c.exit_date.slice(5))}</td><td>${pct(c.ret * 100, 1)}</td><td>${pct(c.mkt * 100, 1)}</td><td>${sign(c.mfe)}</td>
+    ${cases.map(c => `<tr><td>${stk(c.code, esc(c.code))}</td><td>${esc(c.exit_date.slice(5))}</td><td>${pct(c.ret * 100, 1)}</td><td>${pct(c.mkt * 100, 1)}</td><td>${sign(c.mfe)}</td>
       <td class="name">${c.cause_text.map(esc).join("／")}${c.weak_spots.length ? `<br><span class="sub">弱点：${c.weak_spots.map(esc).join("／")}</span>` : ""}${c.note ? `<br>${esc(c.note)}` : ""}</td></tr>`).join("")}
     </table></div></details>`;
   return h;
@@ -536,7 +565,7 @@ function renderHold(){
   else {
     h += `<div class="tw"><table><tr><th class="l">銘柄</th><th>買値</th><th>現在値</th><th>損益</th><th>評価損益</th><th>日数</th><th class="l">判定</th><th></th></tr>`;
     hs.forEach((hd, i) => { const j = judge(hd);
-      h += `<tr><td class="name"><b>${esc(hd.code)}</b> ${esc(j.name||"")}<br><span class="sub">${esc(hd.date)}・${hd.shares}株</span></td><td>${px(hd.price)}</td><td>${px(j.last)}</td>
+      h += `<tr><td class="name">${stk(hd.code, `<b>${esc(hd.code)}</b> ${esc(j.name||"")}`, {entry: hd.price, stop: j.stop ? Math.floor(j.stop) : null})}<br><span class="sub">${esc(hd.date)}・${hd.shares}株</span></td><td>${px(hd.price)}</td><td>${px(j.last)}</td>
         <td>${pct(j.pl)}</td><td>${j.yen==null?"–":`<span class="${j.yen>0?"pos":j.yen<0?"neg":""}">${yen(j.yen)}円</span>`}</td><td>${j.held==null||j.held>900?"–":j.held}</td>
         <td class="l"><b class="badge ${j.cls}">${esc(j.msg)}</b></td><td><button class="x" data-i="${i}" title="削除">✕</button></td></tr>`; });
     h += `</table></div><div class="note">逆指値は「買値 − ATR×倍率」を初期値とし、終値の最高値に合わせて引き上げた目安です。売ったら ✕ で削除してください。</div>`;
@@ -547,6 +576,114 @@ function renderHold(){
     saveH(hs); renderHold(); };
   el.querySelectorAll("button.x").forEach(b => b.onclick = () => { hs.splice(+b.dataset.i, 1); saveH(hs); renderHold(); });
 }
+
+
+/* ---- 銘柄の詳細：チャート（ローソク足・移動平均・出来高）とテクニカル指標 ---- */
+let CH = null;
+const stk = (code, label, ctx = {}) => `<button type="button" class="stk" data-code="${esc(code)}"${
+  ctx.entry ? ` data-entry="${esc(ctx.entry)}"` : ""}${ctx.stop ? ` data-stop="${esc(ctx.stop)}"` : ""}>${label}</button>`;
+const num = (v, d = 0) => v == null ? "–" : Number(v).toLocaleString("ja-JP", {minimumFractionDigits: d, maximumFractionDigits: d});
+
+function candleSvg(dates, d, lines, W = 720){
+  const n = dates.length, PH = W < 500 ? 210 : 250, VH = 64, G = 14, L = 6, R = 52, T = 8;
+  const H = T + PH + G + VH + 20;
+  const vals = [...d.h, ...d.l, ...lines.map(x => x.v)].filter(v => v != null);
+  let lo = Math.min(...vals), hi = Math.max(...vals); const pad = (hi - lo) * .06 || hi * .02; lo -= pad; hi += pad;
+  const bw = (W - L - R) / n, X = i => L + bw * (i + .5), Y = v => T + (hi - v) / (hi - lo) * PH;
+  const vmax = Math.max(...d.v.filter(v => v != null), 1), VY = v => T + PH + G + VH - (v / vmax) * VH;
+  let g = "";
+  for (let k = 0; k <= 4; k++) { const v = lo + (hi - lo) * k / 4, y = Y(v);
+    g += `<line x1="${L}" x2="${W - R}" y1="${y}" y2="${y}" stroke="var(--rule)"/><text x="${W - R + 6}" y="${y + 4}" font-size="11" fill="var(--sub)">${num(v, hi - lo < 30 ? 1 : 0)}</text>`; }
+  let prevM = dates[0].slice(5, 7);
+  dates.forEach((dt, i) => { const m = dt.slice(5, 7); if (m !== prevM) { const x = L + bw * i;
+    g += `<line x1="${x}" x2="${x}" y1="${T}" y2="${T + PH + G + VH}" stroke="var(--rule)"/><text x="${x + 3}" y="${H - 4}" font-size="11" fill="var(--sub)">${+m}月</text>`; prevM = m; } });
+  let c = "";
+  for (let i = 0; i < n; i++) {
+    const o = d.o[i], h = d.h[i], l = d.l[i], cl = d.c[i];
+    if (cl != null && d.v[i] != null) c += `<rect x="${X(i) - bw * .35}" y="${VY(d.v[i])}" width="${bw * .7}" height="${T + PH + G + VH - VY(d.v[i])}" fill="var(--rule2)" opacity=".55"/>`;
+    if (d.line || [o, h, l, cl].some(v => v == null)) continue;
+    const col = cl >= o ? "var(--up)" : "var(--down)", y1 = Y(Math.max(o, cl)), y2 = Y(Math.min(o, cl));
+    c += `<line x1="${X(i)}" x2="${X(i)}" y1="${Y(h)}" y2="${Y(l)}" stroke="${col}"/><rect x="${X(i) - bw * .35}" y="${y1}" width="${bw * .7}" height="${Math.max(y2 - y1, 1)}" fill="${col}"/>`;
+  }
+  const path = a => a.map((v, i) => v == null ? null : `${X(i).toFixed(1)},${Y(v).toFixed(1)}`).filter(Boolean).join(" ");
+  const ma = d.line ? `<polyline fill="none" stroke="var(--ink)" stroke-width="1.5" points="${path(d.c)}"/>` : `<polyline fill="none" stroke="var(--ai)" stroke-width="1.5" points="${path(d.s25)}"/><polyline fill="none" stroke="var(--caution)" stroke-width="1.5" points="${path(d.s75)}"/>`;
+  const hl = lines.map(x => `<line x1="${L}" x2="${W - R}" y1="${Y(x.v)}" y2="${Y(x.v)}" stroke="${x.col}" stroke-dasharray="5 4"/><text x="${L + 4}" y="${Y(x.v) - 4}" font-size="11" fill="${x.col}">${x.label} ${num(x.v, 1)}</text>`).join("");
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="直近${n}営業日の株価チャート" data-bw="${bw}" data-l="${L}" data-w="${W}">${g}${c}${ma}${hl}
+    <line class="cur" x1="0" x2="0" y1="${T}" y2="${T + PH + G + VH}" stroke="var(--sub)" stroke-dasharray="2 3" visibility="hidden"/></svg>`;
+}
+
+function indicators(q, cols){
+  const k = Object.fromEntries(cols.map((c, i) => [c, q.k ? q.k[i] : null])), c = q.c.at(-1);
+  const rel = m => m == null ? "–" : `${c >= m ? "上" : "下"}（${c / m >= 1 ? "+" : ""}${((c / m - 1) * 100).toFixed(1)}%）`;
+  const above = ["sma25", "sma75", "sma200"].filter(x => k[x] != null);
+  const nUp = above.filter(x => c >= k[x]).length;
+  const trend = !above.length ? "" : nUp === above.length ? "25日・75日・200日の平均すべての上：上昇トレンドとされる形"
+    : nUp === 0 ? "25日・75日・200日の平均すべての下：下降トレンドとされる形" : "平均線の上下が入り混じる：方向感がはっきりしない形";
+  const cross = x => !x ? "" : x > 0 ? `${x}日前に上抜け` : `${-x}日前に下抜け`;
+  const it = [
+    ["5日移動平均", num(k.sma5, 1), `株価はこの${rel(k.sma5)}`],
+    ["25日移動平均", num(k.sma25, 1), `株価はこの${rel(k.sma25)}`],
+    ["75日移動平均", num(k.sma75, 1), `株価はこの${rel(k.sma75)}`],
+    ["200日移動平均", num(k.sma200, 1), trend || `株価はこの${rel(k.sma200)}`],
+    ["25日と75日の平均の交差", k.ma_x ? (k.ma_x > 0 ? "ゴールデンクロス" : "デッドクロス") : "直近20日はなし",
+      k.ma_x ? `${cross(k.ma_x)}。上抜けは上昇、下抜けは下落の始まりの合図とされる` : "短期と長期の平均の上下関係が続いている"],
+    ["RSI（14日）", num(k.rsi14, 0), k.rsi14 == null ? "" : k.rsi14 >= 70 ? "70以上：買われすぎとされる水準" : k.rsi14 <= 30 ? "30以下：売られすぎとされる水準" : "30〜70：どちらでもない水準"],
+    ["MACDヒストグラム", k.macd == null ? "–" : `${k.macd > 0 ? "+" : ""}${k.macd.toFixed(2)}%`,
+      (k.macd == null ? "" : k.macd > 0 ? "プラス：上向きの勢いとされる" : "マイナス：下向きの勢いとされる") + (k.macd_x ? `（シグナル線を${cross(k.macd_x)}）` : "")],
+    ["ボリンジャーバンド内の位置", k.bb == null ? "–" : `${k.bb > 0 ? "+" : ""}${k.bb.toFixed(2)}`,
+      k.bb == null ? "" : k.bb >= 1 ? "上の線（+2σ）を超えている：行き過ぎとされる" : k.bb <= -1 ? "下の線（−2σ）を割っている：行き過ぎとされる" : "+1が上の線、−1が下の線、0が20日平均"],
+    ["52週高値からの距離", k.hi52 == null ? "–" : `${k.hi52.toFixed(1)}%`, k.hi52 == null ? "" : k.hi52 > -3 ? "高値圏" : "0に近いほど高値圏"],
+    ["出来高倍率", k.vol == null ? "–" : `${k.vol.toFixed(1)}倍`, "当日の出来高 ÷ 直近20日の平均"],
+    ["値動きの大きさ", k.atr_pct == null ? "–" : `${k.atr_pct.toFixed(1)}%`, "1日の平均的な値幅（ATR）÷ 株価。逆指値の幅の目安になる"],
+  ];
+  return `<dl class="sk-ind">${it.map(([t, v, r]) => `<div><dt>${esc(t)}</dt><dd>${esc(v)}<small>${esc(r)}</small></dd></div>`).join("")}</dl>`;
+}
+
+async function openStock(code, ctx){
+  const dlg = $("#stk");
+  if (!CH) CH = await get("charts.json") || {dates: [], s: {}};
+  const q = Q && Q.q[code], d = CH.s[code];
+  const name = q ? q.n : code, last = q ? q.c.at(-1) : (d ? d.c.at(-1) : null), prev = q ? q.c.at(-2) : null;
+  const lines = [];
+  if (ctx.entry) lines.push({v: ctx.entry, label: "買値", col: "var(--ink)"});
+  if (ctx.stop) lines.push({v: ctx.stop, label: "逆指値", col: "var(--caution)"});
+  let chart = "", dates = [], src = null;
+  const W = Math.round(Math.min(720, Math.max(320, innerWidth - 70)));   // 画面幅に合わせて描く（縮小で文字が潰れないように）
+  if (d) { dates = CH.dates; src = d; chart = candleSvg(dates, d, lines, W); }
+  else if (q) { dates = Q.dates; src = {o: q.c, h: q.c, l: q.c, c: q.c, v: q.c.map(() => null), s25: [], s75: [], line: true}; chart = candleSvg(dates, src, lines, W); }
+  dlg.innerHTML = `<div class="sk-hd"><span class="cd">${esc(code)}</span><span class="nm" id="stk-t">${esc(name)}</span>
+      ${q ? `<span class="mk">${esc(q.m || "")}${q.g ? "・" + esc(q.g) : ""}</span>` : ""}
+      <span class="px">${num(last, 1)}<small>${last != null && prev ? pct((last / prev - 1) * 100, 1) : ""}</small></span>
+      <button type="button" class="sk-x" aria-label="閉じる">閉じる</button></div>
+    <div class="sk-bd">
+      ${chart ? `<div class="sk-read" aria-live="polite"></div>${chart}
+        <div class="sk-leg">${d ? `<span><i style="color:var(--up)"></i>陽線（上げた日）</span><span><i style="color:var(--down)"></i>陰線（下げた日）</span><span><i style="color:var(--ai)"></i>25日移動平均</span><span><i style="color:var(--caution)"></i>75日移動平均</span><span>下段は出来高</span>` : `<span>直近${dates.length}営業日の終値（ローソク足は、画面に出ている銘柄だけ用意しています）</span>`}</div>`
+        : `<p class="note">この銘柄の株価データはありません（監視対象外）。</p>`}
+      ${q && Q.cols ? `<h3>テクニカル指標（${esc(Q.dates.at(-1))} 終値時点）</h3>${indicators(q, Q.cols)}` : ""}
+      <p class="note">読み取りは各指標の一般的な見方です。このシステムの10年分の検証では、これらの指標だけで市場平均を上回る力は確認できていません。判断材料の一つとして見てください。</p>
+      <div class="sk-links">PER・PBRなどの業績指標と適時開示は外部サイトで：
+        <a href="https://kabutan.jp/stock/?code=${encodeURIComponent(code)}" target="_blank" rel="noopener">株探</a>
+        <a href="https://finance.yahoo.co.jp/quote/${encodeURIComponent(code)}.T" target="_blank" rel="noopener">Yahoo!ファイナンス</a></div>
+    </div>`;
+  const svg = dlg.querySelector("svg"), read = dlg.querySelector(".sk-read");
+  const show = i => { if (!src || !read) return; const v = src.v ? src.v[i] : null;
+    read.textContent = `${dates[i]}　` + (d ? `始 ${num(src.o[i], 1)}　高 ${num(src.h[i], 1)}　安 ${num(src.l[i], 1)}　終 ${num(src.c[i], 1)}${v != null ? `　出来高 ${num(v)}株` : ""}` : `終値 ${num(src.c[i], 1)}`); };
+  if (svg && dates.length) {
+    show(dates.length - 1);
+    const bw = +svg.dataset.bw, L = +svg.dataset.l, SW = +svg.dataset.w, cur = svg.querySelector(".cur");
+    svg.addEventListener("pointermove", ev => { const r = svg.getBoundingClientRect(), x = (ev.clientX - r.left) / r.width * SW;
+      const i = Math.max(0, Math.min(dates.length - 1, Math.floor((x - L) / bw))); const cx = L + bw * (i + .5);
+      cur.setAttribute("x1", cx); cur.setAttribute("x2", cx); cur.setAttribute("visibility", "visible"); show(i); });
+    svg.addEventListener("pointerleave", () => { cur.setAttribute("visibility", "hidden"); show(dates.length - 1); });
+  }
+  dlg.querySelector(".sk-x").onclick = () => dlg.close();
+  if (!dlg.open) dlg.showModal();
+}
+document.addEventListener("click", ev => {
+  const b = ev.target.closest("button.stk");
+  if (b) openStock(b.dataset.code, {entry: b.dataset.entry ? +b.dataset.entry : null, stop: b.dataset.stop ? +b.dataset.stop : null});
+});
+$("#stk").addEventListener("click", ev => { if (ev.target.id === "stk") ev.target.close(); });   // 外側を押すと閉じる
 
 (async () => {
   [T, V, PM] = await Promise.all([get("today.json"), get("validation.json"), get("postmortem.json")]);
