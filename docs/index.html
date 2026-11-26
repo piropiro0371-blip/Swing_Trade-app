@@ -384,7 +384,7 @@ function renderLearn(){
       <div class="kpi"><b>${T ? T.strategies.filter(s=>s.adopted).length : 0}</b><span>採用中の戦略</span></div>
       <div class="kpi"><b>${T ? T.strategies.filter(s=>s.stage==="フォワード確認中").length : 0}</b><span>フォワード確認中</span></div>
     </div>
-    ${D ? `<div class="note">原因分析の更新：${esc(D.generated)}（週1回、自動で更新）</div>` : ""}</div>`;
+    ${D ? `<div class="note">原因分析の更新：${esc(D.generated)}（平日は毎日、自動で更新）</div>` : ""}</div>`;
 
   if (D) for (const s of D.strategies) {
     h += `<div class="card"><h2>原因分析：${esc(s.label)}</h2>

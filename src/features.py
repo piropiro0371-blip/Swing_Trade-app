@@ -105,7 +105,7 @@ def describe(f: dict) -> str:
 
 
 def round_sig(x: float, n: int = 2) -> float:
-    """しきい値を有効数字n桁に丸める（毎週わずかに変わって別物として数えられるのを防ぐ）"""
+    """しきい値を有効数字n桁に丸める（実行のたびにわずかに変わって別物として数えられるのを防ぐ）"""
     if x == 0 or not np.isfinite(x):
         return 0.0
     return float(f"{x:.{n}g}")

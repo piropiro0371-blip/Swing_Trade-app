@@ -4,16 +4,12 @@ on:
   schedule:
     # 平日 18:10（日本時間）= 09:10 UTC。大引け(15:30)後、株価データが出そろってから実行
     - cron: "10 9 * * 1-5"
-    # 土曜 10:10（日本時間）に監視銘柄を作り直し、学習サイクルを回す
+    # 土曜 10:10（日本時間）に監視銘柄を作り直す（学習サイクルは毎回の実行で回す）
     - cron: "10 1 * * 6"
   workflow_dispatch:
     inputs:
       refresh_universe:
         description: "監視銘柄も作り直す"
-        type: boolean
-        default: false
-      learn:
-        description: "学習サイクルも回す（約40分）"
         type: boolean
         default: false
 
@@ -42,25 +38,17 @@ jobs:
         if: github.event.schedule == '10 1 * * 6' || inputs.refresh_universe
         run: python -m src.refresh_universe
 
-      # --- 週1回の学習サイクル: 10年分のデータで検証し直し、負けの原因を分析して改善案を採点する
+      # --- 学習サイクル用: 全上場銘柄・10年分の株価（毎回取り直す。手動実行のためにも保存）
       - name: 学習用の株価を取得（全上場銘柄・10年分）
-        if: github.event.schedule == '10 1 * * 6' || inputs.learn
+        continue-on-error: true   # 失敗しても、その日の判定は保存する
         run: python -m src.data --period 10y --tag bt
 
       - name: 取得した株価を手動実行のために保存
-        if: github.event.schedule == '10 1 * * 6' || inputs.learn
+        if: ${{ hashFiles('data/cache/prices_bt.parquet') != '' }}
         uses: actions/cache/save@v4
         with:
           path: data/cache/prices_bt.parquet
           key: prices-bt-${{ github.run_id }}
-
-      - name: 検証（5基準の合否）
-        if: github.event.schedule == '10 1 * * 6' || inputs.learn
-        run: python -m src.research
-
-      - name: 学習ループ（原因分析 → 改善案 → 採点 → 学習ノート）
-        if: github.event.schedule == '10 1 * * 6' || inputs.learn
-        run: python -m src.learn
 
       - name: 株価を取得（監視銘柄・2年分）
         run: python -m src.data --period 2y --tag daily
@@ -99,8 +87,18 @@ jobs:
           python -m src.fundamentals
           python -m src.splits
 
-      - name: 判定とフォワードテストの更新
+      - name: 判定とフォワードテストの更新（フォワードの負けの分析と仮説の登録を含む）
         run: python -m src.daily
+
+      # --- 学習サイクル（毎回）: 10年分で検証し直し → 負けの原因を分析 → 改善案と、今日までに
+      #     フォワードの負けから登録された仮説を学習期間で予選 → 上位だけ本選 → 学習ノートと研究リストに記録
+      - name: 検証（5基準の合否）
+        continue-on-error: true   # 失敗しても、その日の判定は保存する
+        run: python -m src.research
+
+      - name: 学習ループ（原因分析 → 改善案 → 採点 → 学習ノート）
+        continue-on-error: true   # 失敗しても、その日の判定は保存する
+        run: python -m src.learn
 
       - name: 結果を保存
         run: |

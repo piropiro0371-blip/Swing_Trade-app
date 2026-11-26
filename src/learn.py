@@ -74,6 +74,12 @@ def run() -> None:
     p = Panel(data.load("bt"))
     base = p.tradable(max_price=cfg["capital"] / cfg["lot"], min_turnover=cfg["min_turnover"])
 
+    # 前回の原因分析の境目を引き継ぐ（10年分の窓が毎日少しずつずれても、絞り込み案の数値が変わらないように。
+    # 変わると同じ案が「新しい仮説」として数えられ、試した数が水増しされて合格ラインが不当に上がる）
+    prev_edges = {}
+    if os.path.exists(OUT_DIAG):
+        with open(OUT_DIAG, encoding="utf-8") as f:
+            prev_edges = {x["id"]: x for x in json.load(f).get("strategies", [])}
     diag = {"generated": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M"),
             "features": {k: v[0] for k, v in features.FEATURES.items()}, "strategies": []}
     lessons, new_total, passed_total, finalists_total = [], 0, 0, 0
@@ -86,6 +92,9 @@ def run() -> None:
 
         # 1. 原因分析（境目は学習期間だけで決める）
         edges = diagnose.edges_from(t_is)
+        old = prev_edges.get(name)
+        if old and old.get("params") == params and old.get("edges"):
+            edges = {**edges, **{k: v for k, v in old["edges"].items() if k in edges}}
         bk_is, bk_oos = diagnose.buckets(t_is, edges), diagnose.buckets(t_oos, edges)
         reasons = diagnose.by_reason(tr)
         found = diagnose.findings(s["label"], stats(tr), reasons, bk_is, bk_oos)
@@ -162,7 +171,7 @@ def run() -> None:
             lessons.append(f"{h['id']}（フォワードの負けから）: {h['result']}")
 
         diag["strategies"].append({
-            "id": name, "label": s["label"], "findings": found, "reasons": reasons,
+            "id": name, "label": s["label"], "params": params, "findings": found, "reasons": reasons,
             "buckets_is": bk_is, "buckets_oos": bk_oos, "edges": edges,
             "candidates": sorted(cands, key=lambda c: -c["is_t"])[:12], "n_candidates": len(cands),
         })

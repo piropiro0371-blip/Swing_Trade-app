@@ -63,7 +63,7 @@ jobs:
           cache: pip
       - run: pip install -r requirements.txt
 
-      # 10年分の株価は取得に約25分かかるので、前回取得した分を使い回す（週1回の自動実行で新しくなる）
+      # 10年分の株価は取得に約25分かかるので、前回取得した分を使い回す（毎日の自動実行で新しくなる）
       - name: 保存済みの株価（10年分）を取り出す
         if: ${{ !startsWith(inputs.action, '今日の判定') }}
         id: prices
