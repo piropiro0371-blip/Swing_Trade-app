@@ -1,7 +1,9 @@
 """
 J-Quants API（日本取引所グループ公式のデータ配信）からの取得。
 
-APIキーは .env の JQUANTS_API_KEY から読む（Git管理外。画面やログに出さない）。
+APIキーは環境変数か .env の JQUANTS_API_KEY から読む（Git管理外。画面やログに出さない）。
+クラウドのClaude Code（claude.ai/code）では、キーを作業環境に置かず「ネットワークシークレット」で
+通信の途中に付けてもらうため、キーが無くても x-api-key ヘッダーを付けずにそのまま呼ぶ。
 Freeプランは「直近12週間を除く2年分」「1分あたり5回まで」の制限があるため、
 呼び出しの間隔を空け、取得結果は data/cache/ に保存して使い回す。
 """
@@ -22,7 +24,7 @@ INTERVAL = 13.0   # Freeプランの上限（5回/分）に収まる呼び出し
 _last = 0.0
 
 
-def _key() -> str:
+def _key() -> str | None:
     k = os.environ.get("JQUANTS_API_KEY", "")
     path = os.path.join(ROOT, ".env")
     if not k and os.path.exists(path):
@@ -30,6 +32,8 @@ def _key() -> str:
             if line.startswith("JQUANTS_API_KEY="):
                 k = line.split("=", 1)[1].strip()
     if not k:
+        if os.environ.get("CLAUDE_CODE_REMOTE") == "true":
+            return None   # クラウドの作業環境: キーはネットワークシークレットが通信の途中で付ける
         raise SystemExit("JQUANTS_API_KEY が設定されていません（.env を確認）")
     return k
 
@@ -43,7 +47,7 @@ def get(path: str, params: dict, interval: float = INTERVAL) -> list[dict]:
         if wait > 0:
             time.sleep(wait)
         _last = time.time()
-        res = requests.get(f"{BASE}{path}", params=params, headers={"x-api-key": _key()}, timeout=60)
+        res = requests.get(f"{BASE}{path}", params=params, headers={"x-api-key": k} if (k := _key()) else {}, timeout=60)
         if res.status_code == 429:   # 呼び出し過多。少し待ってやり直す
             time.sleep(60)
             continue
