@@ -140,6 +140,11 @@ def run() -> None:
 
     ledger = _load_json(LEDGER, {"start": ds, "signals": []})
     prev_today = _load_json(os.path.join(DOCS, "today.json"), {})
+    if prev_today.get("date", "") > ds:
+        # 1日に何回か実行するため、後から動いた実行が未確定のデータに当たることがある。
+        # そのときは、すでに出ている新しい日の判定を古い日付で上書きしない
+        print(f"{ds} は公開中の判定（{prev_today['date']}）より古いため、書き出さずに終了します", flush=True)
+        return
     seen = {(s["date"], s["code"], s["strategy"]) for s in ledger["signals"]}
 
     def info(code):
