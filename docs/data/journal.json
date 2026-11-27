@@ -368,7 +368,18 @@
   "breakout|{\"lookback\": 60, \"max_hold\": 40, \"regime\": false, \"trail_atr\": 2.0, \"vol_mult\": 2.5}|macd_hist[0.0048,None)",
   "gap_drift|{\"gap\": 0.05, \"max_hold\": 20, \"regime\": true, \"trail_atr\": 3.0, \"vol_mult\": 4.0}|turnover[None,97000000.0)",
   "gap_drift|{\"gap\": 0.05, \"max_hold\": 20, \"regime\": true, \"trail_atr\": 3.0, \"vol_mult\": 4.0}|turnover[97000000.0,220000000.0)",
-  "gap_drift|{\"gap\": 0.05, \"max_hold\": 20, \"regime\": true, \"trail_atr\": 3.0, \"vol_mult\": 4.0}|turnover[97000000.0,None)"
+  "gap_drift|{\"gap\": 0.05, \"max_hold\": 20, \"regime\": true, \"trail_atr\": 3.0, \"vol_mult\": 4.0}|turnover[97000000.0,None)",
+  "trend_vcp|{}|",
+  "qulla|{}|",
+  "pullback|{\"exit\": \"pct7_sma10\", \"max_hold\": 10, \"regime\": true, \"rsi_max\": 5, \"stop_atr\": 3.0}|",
+  "pullback|{\"exit\": \"pct7_sma20\", \"max_hold\": 10, \"regime\": true, \"rsi_max\": 5, \"stop_atr\": 3.0}|",
+  "pullback|{\"exit\": \"pct7_sma50\", \"max_hold\": 10, \"regime\": true, \"rsi_max\": 5, \"stop_atr\": 3.0}|",
+  "breakout|{\"exit\": \"pct7_sma10\", \"lookback\": 60, \"max_hold\": 40, \"regime\": false, \"trail_atr\": 2.0, \"vol_mult\": 2.5}|",
+  "breakout|{\"exit\": \"pct7_sma20\", \"lookback\": 60, \"max_hold\": 40, \"regime\": false, \"trail_atr\": 2.0, \"vol_mult\": 2.5}|",
+  "breakout|{\"exit\": \"pct7_sma50\", \"lookback\": 60, \"max_hold\": 40, \"regime\": false, \"trail_atr\": 2.0, \"vol_mult\": 2.5}|",
+  "gap_drift|{\"exit\": \"pct7_sma10\", \"gap\": 0.05, \"max_hold\": 20, \"regime\": true, \"trail_atr\": 3.0, \"vol_mult\": 4.0}|",
+  "gap_drift|{\"exit\": \"pct7_sma20\", \"gap\": 0.05, \"max_hold\": 20, \"regime\": true, \"trail_atr\": 3.0, \"vol_mult\": 4.0}|",
+  "gap_drift|{\"exit\": \"pct7_sma50\", \"gap\": 0.05, \"max_hold\": 20, \"regime\": true, \"trail_atr\": 3.0, \"vol_mult\": 4.0}|"
  ],
  "extra_trials": 152,
  "entries": [
@@ -564,9 +575,22 @@
    "body": "決済10件中、負け10件。主な原因は 市場全体の下げに巻き込まれた 5件、銘柄固有の下げ（市場平均より大きく負けた） 5件、窓開けで逆指値を飛び越えた 2件。バックテストで分かっていた弱い状態に当たっていた負けは 10件。",
    "lessons": [],
    "result": ""
+  },
+  {
+   "date": "2026-11-27",
+   "kind": "調査",
+   "title": "著名スイングトレーダー（ミネルヴィニ・クラマギー・オニール・DUKE。）の手法を検証（11通り）",
+   "body": "4人の手法を調べ、日足で表せる部分を売買ルールに直して、学習期間（2016〜2022年）だけで予選にかけた。ミネルヴィニ流（トレンドテンプレート＋収縮後ブレイク）、クラマギー流（急騰株のもみ合い放れ）、3人に共通する出口（-7%損切り＋移動平均割れで売る）を既存3戦略に付け替えた9通り、の計11通り。結果はすべて予選落ち（市場平均を上回るものなし）で、検証期間は見ていない。研究リスト H010〜H012。決算の窓開けを待って買う案は、10年分の決算発表日が無いため H013（データ待ち）として登録。",
+   "lessons": [
+    "米国で実績のある順張り（モメンタム）手法は、日本株の日足ではそのままでは通用しなかった。日本株はモメンタムが弱く短期の反転が強いという学術研究（Asness 2011）と整合する。",
+    "売り方を「損小利大」に変えても成績は改善しなかった。これまでの戦略の負けの原因は売り方ではなく買い方（入口）にある。",
+    "ミネルヴィニ流の条件を満たす日本株は少なく（6年で47件）、20万円・同時2銘柄の運用では機会自体が乏しい。",
+    "有名トレーダーの実績は本人の主張か大会主催者の発表で、同じ手法で退場した人は見えない（生存者バイアス）点にも注意。"
+   ],
+   "result": "予選 11通り中 0通り通過"
   }
  ],
- "trials_total": 521,
+ "trials_total": 532,
  "t_required": 3.0,
  "fwd_milestones": {}
 }

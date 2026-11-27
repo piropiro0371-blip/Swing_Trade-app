@@ -123,6 +123,8 @@ class ExitSpec:
     max_hold: int = 10             # 最大保有日数（営業日）
     stop_on_close: bool = False    # True: 逆指値注文を使わず、終値が損切りラインを割ったら翌朝の寄り付きで売る
                                    #       （S株＝1株単位の取引は逆指値注文が使えないため）
+    stop_pct: float | None = None  # 損切りを「買値から何%下」で置く（例 0.07 = -7%。オニール・ミネルヴィニ流）。stop_atr より優先
+    stop_low: bool = False         # 損切りを「シグナルが出た日の安値」に置く（クラマギー流）。stop_pct より優先
 
 
 def simulate(p: Panel, entries: pd.DataFrame, score: pd.DataFrame, ex: ExitSpec,
@@ -150,7 +152,15 @@ def simulate(p: Panel, entries: pd.DataFrame, score: pd.DataFrame, ex: ExitSpec,
             atr = a[i]
             if not (entry > 0) or not (atr > 0):
                 continue
-            stop = entry - ex.stop_atr * atr
+            if ex.stop_low:
+                stop = l[i]
+            elif ex.stop_pct:
+                stop = entry * (1 - ex.stop_pct)
+            else:
+                stop = entry - ex.stop_atr * atr
+            if not (stop < entry):   # 寄り付きが損切りラインより下なら買わない
+                continue
+            stop0 = stop   # 買った時点の損切りライン（資金管理で使う「損切りまでの幅」）
             target = entry + ex.target_atr * atr if ex.target_atr else None
             hi_close = entry
             exit_px = None
@@ -202,7 +212,7 @@ def simulate(p: Panel, entries: pd.DataFrame, score: pd.DataFrame, ex: ExitSpec,
                 reason = "逆指値で利益確定"   # 引き上げた逆指値に掛かったが、買値より上で売れた
             busy_until = x
             rows.append((j, i, e, x, entry, exit_px, held, S[i, j], reason, stop, pending or "",
-                         ex.stop_atr * atr / entry))
+                         (entry - stop0) / entry))
     if not rows:
         return pd.DataFrame(columns=["code", "signal_date", "entry_date", "exit_date", "entry", "exit",
                                      "hold", "score", "reason", "ret", "mkt", "excess"])
