@@ -182,7 +182,11 @@ const yen = v => v == null ? "–" : Math.round(v).toLocaleString("ja-JP");
 const px = v => v == null ? "–" : Number(v).toLocaleString("ja-JP", {maximumFractionDigits:1});
 const pct = (v, d=2) => v == null ? "–" : `<span class="${v>0?"pos":v<0?"neg":""}">${v>0?"+":""}${Number(v).toFixed(d)}%</span>`;
 const frac = (v, d=2) => v == null ? "–" : pct(v*100, d);
-const get = async f => { try { const r = await fetch(`data/${f}?t=${Date.now()}`); return r.ok ? r.json() : null; } catch { return null; } };
+let FROM_CACHE = false;   // 通信できず、前回保存した内容を表示しているか（sw.js が印を付ける）
+const get = async f => { try { const r = await fetch(`data/${f}?t=${Date.now()}`);
+  if (r.headers.get("x-from-cache")) { FROM_CACHE = true; showOffline(); }
+  return r.ok ? r.json() : null; } catch { return null; } };
+function showOffline(){ const a = document.getElementById("asof"); if (a && !a.textContent.includes("オフライン")) a.textContent += "（オフライン：前回の内容を表示中）"; }
 
 document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
   document.querySelectorAll("nav button").forEach(x => x.setAttribute("aria-selected", x === b));
@@ -696,7 +700,7 @@ $("#stk").addEventListener("click", ev => { if (ev.target.id === "stk") ev.targe
 
 /* スマホのアプリとして使う: 電波が無いときは前回保存した内容で開く（sw.js） */
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
-window.addEventListener("offline", () => { const a = $("#asof"); if (a && !a.textContent.includes("オフライン")) a.textContent += "（オフライン：前回の内容を表示中）"; });
+window.addEventListener("offline", showOffline);
 
 (async () => {
   [T, V, PM] = await Promise.all([get("today.json"), get("validation.json"), get("postmortem.json")]);
@@ -705,7 +709,7 @@ window.addEventListener("offline", () => { const a = $("#asof"); if (a && !a.tex
   [D, J, HY, M] = await Promise.all([get("diagnosis.json"), get("journal.json"), get("hypotheses.json"), get("manual.json")]);
   renderLearn(); renderManual();
   Q = await get("quotes.json"); renderHold();
-  if (!navigator.onLine) window.dispatchEvent(new Event("offline"));
+  if (FROM_CACHE || !navigator.onLine) showOffline();   // 判定の表示で上書きされた後にもう一度付ける
 })();
 </script>
 </body>
