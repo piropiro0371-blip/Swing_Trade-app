@@ -219,9 +219,21 @@ def run() -> None:
         closed = fwd[fwd["reason"] != "open"]
         top = closed[closed["rank"] <= cfg["max_positions"]]
 
+        def size(entry, risk_frac, why=False):
+            """今の資金管理のルールで買える株数（1銘柄の枠と、損切り時の損失の上限の両方に収まる数）"""
+            by_slot = int(slot // (entry * lot)) * lot
+            stop_w = entry * risk_frac
+            by_risk = int(risk_yen // (stop_w * lot)) * lot if risk_yen and stop_w > 0 else by_slot
+            n = max(min(by_slot, by_risk), 0)
+            if why:
+                return n, "" if n else ("1銘柄の枠を超過" if by_slot == 0 else "損失上限を超過")
+            return n
+
         def trade_row(t):
             cur = float(close_now[t.code])
             is_open = t.reason == "open"
+            r = (cur / t.entry - 1) if is_open else t.ret
+            sh, why = size(float(t.entry), float(t.risk), why=True)
             return {**info(t.code), "rank": int(t.rank), "signal_date": t.signal_date.strftime("%Y-%m-%d"),
                     "entry_date": t.entry_date.strftime("%Y-%m-%d"), "entry": _r(t.entry),
                     "exit_date": None if is_open else t.exit_date.strftime("%Y-%m-%d"),
@@ -229,11 +241,18 @@ def run() -> None:
                     "ret": _r((cur / t.entry - 1) * 100 if is_open else t.ret * 100, 2),
                     "hold": int(t.hold), "reason": "保有中" if is_open else t.reason,
                     "close": _r(cur), "stop": _r(t.stop_now) if is_open else None,
-                    "sell_tomorrow": t.pending if is_open and t.pending else ""}
+                    "sell_tomorrow": t.pending if is_open and t.pending else "",
+                    "shares": sh, "yen": round(sh * float(t.entry) * r) if sh else None,   # 損益の金額（コスト差引後。ルールで買えないなら None）
+                    "skip": why, "yen100": round(lot * float(t.entry) * r)}                # 100株で買った場合の損益の金額（参考）
 
         open_rows = [trade_row(t) for t in fwd[fwd["reason"] == "open"].itertuples()]
         closed_rows = [trade_row(t) for t in closed.sort_values("exit_date", ascending=False).head(200).itertuples()]
         s_all, s_top = stats(closed), stats(top)
+        # 損益の合計金額（各シグナルを、資金管理のルールどおりの株数で1回ずつ買ったと仮定）
+        yen_of = lambda df: int(sum(size(float(t.entry), float(t.risk)) * float(t.entry) * t.ret for t in df.itertuples()))
+        s_all["yen"], s_top["yen"] = yen_of(closed), yen_of(top)
+        yen100 = lambda df: int(sum(lot * float(t.entry) * t.ret for t in df.itertuples()))
+        s_all["yen100"], s_top["yen100"] = yen100(closed), yen100(top)
 
         # --- 監視: フォワードの成績がバックテストの期待と合っているか
         bt = val.get(sid, {}).get("all", {})

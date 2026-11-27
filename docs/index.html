@@ -86,6 +86,7 @@ td.name{white-space:normal;min-width:9em;text-align:left}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));border-top:1px solid var(--rule);margin:12px 0}
 .kpi{padding:9px 10px 8px;border-bottom:1px solid var(--rule)}
 .kpi b{display:block;font-size:18px;font-variant-numeric:tabular-nums}
+.kpi b small.amt{display:block;font-size:13px;line-height:1.4}
 .kpi>span{font-size:12px;color:var(--sub)}
 .note{font-size:13px;color:var(--sub);margin:8px 0 0;max-width:46em}
 ul.plain{margin:6px 0;padding-left:1.2em} ul.plain li{margin:2px 0}
@@ -182,6 +183,8 @@ const yen = v => v == null ? "–" : Math.round(v).toLocaleString("ja-JP");
 const px = v => v == null ? "–" : Number(v).toLocaleString("ja-JP", {maximumFractionDigits:1});
 const pct = (v, d=2) => v == null ? "–" : `<span class="${v>0?"pos":v<0?"neg":""}">${v>0?"+":""}${Number(v).toFixed(d)}%</span>`;
 const frac = (v, d=2) => v == null ? "–" : pct(v*100, d);
+const syen = v => v == null ? "–" : `<span class="${v>0?"pos":v<0?"neg":""}">${v>0?"+":v<0?"−":""}${yen(Math.abs(v))}円</span>`;   // 損益の金額
+const fracYen = (v, cap, d=1) => v == null ? "–" : `${frac(v, d)}<small class="amt">${syen(v * cap)}</small>`;          // ％と金額を並べる
 let FROM_CACHE = false;   // 通信できず、前回保存した内容を表示しているか（sw.js が印を付ける）
 const get = async f => { try { const r = await fetch(`data/${f}?t=${Date.now()}`);
   if (r.headers.get("x-from-cache")) { FROM_CACHE = true; showOffline(); }
@@ -280,11 +283,11 @@ function renderToday(){
 
 function tradeTable(rows, open){
   if (!rows.length) return `<div class="note">${open ? "仮想で保有中の銘柄はありません。" : "決済済みのトレードはまだありません。"}</div>`;
-  let h = `<div class="tw"><table><tr><th class="l">銘柄</th><th>順位</th><th>買い日</th><th>買値</th>${open?"<th>現在値</th><th>逆指値</th>":"<th>売り日</th><th>売値</th>"}<th>損益</th><th>日数</th><th class="l">${open?"判定":"売った理由"}</th></tr>`;
+  let h = `<div class="tw"><table><tr><th class="l">銘柄</th><th>順位</th><th>買い日</th><th>買値</th>${open?"<th>現在値</th><th>逆指値</th>":"<th>売り日</th><th>売値</th>"}<th>損益</th><th>株数</th><th>損益（円）</th><th>日数</th><th class="l">${open?"判定":"売った理由"}</th></tr>`;
   for (const t of rows) h += `<tr><td class="name">${stk(t.code, `<b>${esc(t.code)}</b> ${esc(t.name)}`, open ? {entry: t.entry, stop: t.stop} : {entry: t.entry})}</td><td>${t.rank}</td><td>${t.entry_date.slice(5)}</td><td>${px(t.entry)}</td>
     ${open ? `<td>${px(t.close)}</td><td>${px(t.stop)}</td>` : `<td>${t.exit_date.slice(5)}</td><td>${px(t.exit)}</td>`}
-    <td>${pct(t.ret)}</td><td>${t.hold}</td><td class="l">${open ? (t.sell_tomorrow ? `<b class="neg">明日の寄りで売り（${esc(t.sell_tomorrow)}）</b>` : "保有継続") : esc(t.reason)}</td></tr>`;
-  return h + `</table></div>`;
+    <td>${pct(t.ret)}</td><td>${t.shares ? t.shares : `<span class="sub">${esc(t.skip || "予算外")}</span>`}</td><td>${t.shares ? syen(t.yen) : t.yen100 == null ? "–" : `<span class="sub">100株なら ${syen(t.yen100)}</span>`}</td><td>${t.hold}</td><td class="l">${open ? (t.sell_tomorrow ? `<b class="neg">明日の寄りで売り（${esc(t.sell_tomorrow)}）</b>` : "保有継続") : esc(t.reason)}</td></tr>`;
+  return h + `</table></div><div class="note">損益（円）は、今の資金管理のルール（1銘柄の枠と、損切り時の損失を資金の一定割合に抑える株数）で買った場合の金額です（コスト差引後${open ? "。保有中は今日の終値で計算" : ""}）。ルールでは買えない銘柄は、参考として100株で買った場合の金額を薄い文字で出しています。</div>`;
 }
 
 function pmBlock(s){
@@ -317,10 +320,10 @@ function renderFwd(){
     const v = V && V.strategies.find(x => sidOf(x) === sidOf(s));
     const k = (o, f) => o && o.n ? f(o) : "–";
     h += `<div class="card"><h2>${esc(s.label)} ${stageBadge(s)}</h2>
-      <div class="tw"><table><tr><th class="l"></th><th>取引数</th><th>勝率</th><th>平均損益</th><th>市場平均との差</th><th>損益レシオ(PF)</th></tr>
-      <tr><td>フォワード（全シグナル）</td><td>${a.n||0}</td><td>${k(a,o=>(o.win_rate*100).toFixed(0)+"%")}</td><td>${k(a,o=>frac(o.avg_ret))}</td><td>${k(a,o=>frac(o.avg_excess))}</td><td>${k(a,o=>o.profit_factor == null ? "–" : o.profit_factor.toFixed(2))}</td></tr>
-      <tr><td>フォワード（上位のみ）</td><td>${t.n||0}</td><td>${k(t,o=>(o.win_rate*100).toFixed(0)+"%")}</td><td>${k(t,o=>frac(o.avg_ret))}</td><td>${k(t,o=>frac(o.avg_excess))}</td><td>${k(t,o=>o.profit_factor == null ? "–" : o.profit_factor.toFixed(2))}</td></tr>
-      ${v ? `<tr><td>バックテストの期待値</td><td class="sub">${v.all.n}</td><td>${(v.all.win_rate*100).toFixed(0)}%</td><td>${frac(v.all.avg_ret)}</td><td>${frac(v.all.avg_excess)}</td><td>${v.all.profit_factor.toFixed(2)}</td></tr>` : ""}
+      <div class="tw"><table><tr><th class="l"></th><th>取引数</th><th>合計損益（円）</th><th>勝率</th><th>平均損益</th><th>市場平均との差</th><th>損益レシオ(PF)</th></tr>
+      <tr><td>フォワード（全シグナル）</td><td>${a.n||0}</td><td>${k(a,o=>`${syen(o.yen)}<br><span class="sub">100株ずつなら ${syen(o.yen100)}</span>`)}</td><td>${k(a,o=>(o.win_rate*100).toFixed(0)+"%")}</td><td>${k(a,o=>frac(o.avg_ret))}</td><td>${k(a,o=>frac(o.avg_excess))}</td><td>${k(a,o=>o.profit_factor == null ? "–" : o.profit_factor.toFixed(2))}</td></tr>
+      <tr><td>フォワード（上位のみ）</td><td>${t.n||0}</td><td>${k(t,o=>`${syen(o.yen)}<br><span class="sub">100株ずつなら ${syen(o.yen100)}</span>`)}</td><td>${k(t,o=>(o.win_rate*100).toFixed(0)+"%")}</td><td>${k(t,o=>frac(o.avg_ret))}</td><td>${k(t,o=>frac(o.avg_excess))}</td><td>${k(t,o=>o.profit_factor == null ? "–" : o.profit_factor.toFixed(2))}</td></tr>
+      ${v ? `<tr><td>バックテストの期待値</td><td class="sub">${v.all.n}</td><td class="sub">–</td><td>${(v.all.win_rate*100).toFixed(0)}%</td><td>${frac(v.all.avg_ret)}</td><td>${frac(v.all.avg_excess)}</td><td>${v.all.profit_factor.toFixed(2)}</td></tr>` : ""}
       </table></div>
       <div class="note">期待とのずれ：<b>${esc(s.health ? s.health.status : "–")}</b>${s.health && s.health.enough ? `（ずれの大きさ z=${s.health.z}。−2未満なら偶然とは考えにくい不調）` : "　決済30件までは偶然の影響が大きく、良し悪しを判断しません。"}</div>
       ${s.diag && s.diag.reasons.length ? `<h3>売った理由の内訳</h3><div class="tw"><table><tr><th class="l">理由</th><th>件数</th><th>割合</th><th>平均損益</th><th>勝率</th></tr>${s.diag.reasons.map(r=>`<tr><td>${esc(r.reason)}</td><td>${r.n}</td><td>${(r.share*100).toFixed(0)}%</td><td>${frac(r.avg_ret)}</td><td>${(r.win_rate*100).toFixed(0)}%</td></tr>`).join("")}</table></div>` : ""}
@@ -369,9 +372,9 @@ function renderBt(){
       <div class="tw"><table><tr><th class="l">期間</th><th>取引数</th><th>勝率</th><th>平均損益</th><th>市場平均との差</th><th>t値</th><th>PF</th><th>平均保有</th></tr>
       ${row("学習期間", i)}${row("検証期間", o)}</table></div>
       <div class="kpis">
-        <div class="kpi"><b>${frac(pf.oos.total_ret,1)}</b><span>検証期間の損益（資金${yen(V.capital)}円・${mp}銘柄まで）</span></div>
-        <div class="kpi"><b>${frac(pf.oos.bench_total_ret,1)}</b><span>同じ期間のTOPIX</span></div>
-        <div class="kpi"><b>${frac(pf.oos.max_dd,1)}</b><span>検証期間の最大下落</span></div>
+        <div class="kpi"><b>${fracYen(pf.oos.total_ret, V.capital)}</b><span>検証期間の損益（資金${yen(V.capital)}円・${mp}銘柄まで）</span></div>
+        <div class="kpi"><b>${fracYen(pf.oos.bench_total_ret, V.capital)}</b><span>同じ期間・同じ金額でTOPIX</span></div>
+        <div class="kpi"><b>${fracYen(pf.oos.max_dd, V.capital)}</b><span>検証期間の最大下落</span></div>
         <div class="kpi"><b>${s.all.years_pos}/${s.all.years}年</b><span>プラスだった年</span></div>
         <div class="kpi"><b>${(s.robust*100).toFixed(0)}%</b><span>設定を変えてもプラスの割合</span></div>
       </div>
@@ -512,10 +515,10 @@ function renderManual(){
         <div class="tw"><table><tr><th class="l">期間</th><th>取引数</th><th>勝率</th><th>平均損益</th><th>市場平均との差</th><th>t値</th><th>PF</th><th>平均保有</th></tr>
         ${row("学習期間", i)}${row("検証期間", o)}${row("全期間", r.all)}</table></div>
         <div class="kpis">
-          <div class="kpi"><b>${frac(pf.all.total_ret, 1)}</b><span>全期間の損益</span></div>
-          <div class="kpi"><b>${frac(pf.all.bench_total_ret, 1)}</b><span>同じ期間のTOPIX</span></div>
-          <div class="kpi"><b>${frac(pf.all.max_dd, 1)}</b><span>最大下落</span></div>
-          <div class="kpi"><b>${frac(pf.all.worst_hit, 1)}</b><span>最悪の1取引（資金比）</span></div>
+          <div class="kpi"><b>${fracYen(pf.all.total_ret, r.capital)}</b><span>全期間の損益（資金${yen(r.capital)}円）</span></div>
+          <div class="kpi"><b>${fracYen(pf.all.bench_total_ret, r.capital)}</b><span>同じ期間・同じ金額でTOPIX</span></div>
+          <div class="kpi"><b>${fracYen(pf.all.max_dd, r.capital)}</b><span>最大下落</span></div>
+          <div class="kpi"><b>${fracYen(pf.all.worst_hit, r.capital)}</b><span>最悪の1取引</span></div>
           <div class="kpi"><b>${pf.all.trades ?? 0}回</b><span>実際に買えた取引</span></div>
         </div>
         ${chart(pf.all.curve, pf.all.bench_curve)}
