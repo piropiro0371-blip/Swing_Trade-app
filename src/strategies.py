@@ -207,17 +207,38 @@ def kahanshin(p: Panel, base: pd.DataFrame, max_hold=5, **_):
     return sig, p.ret(126), ExitSpec(stop_low=True, max_hold=max_hold)
 
 
+def reversal(p: Panel, base: pd.DataFrame, look=5, bottom=0.05, hold=5, **_):
+    """短期リバーサル（日本株で学術的に確認されている、売られすぎた株の反発。Iihara・Kato・Tokunaga 2004 など）:
+    買える銘柄の中で、直近 look 日の下落率が下位 bottom（既定5%）に入った銘柄を買い、hold 営業日持って売る。
+    損切りは置かない（反発を待つ手法のため。期限で撤退）。（2026-11-27 調査）"""
+    r = p.ret(look).where(base)
+    pct = r.rank(axis=1, pct=True)
+    sig = base & (pct <= bottom)
+    return sig, -r, ExitSpec(stop_pct=0.9, max_hold=hold)
+
+
+def lowvol(p: Panel, base: pd.DataFrame, look=60, bottom=0.10, hold=20, **_):
+    """低ボラティリティ効果（値動きの小さい株ほど、リスクの割に報われやすい現象）:
+    毎月最初の営業日に、買える銘柄の中で直近 look 日の値動き（日次騰落の標準偏差）が下位 bottom の銘柄を買い、hold 営業日持つ。"""
+    vol = p.c.pct_change().rolling(look, min_periods=look).std().where(base)
+    pct = vol.rank(axis=1, pct=True)
+    first = pd.Series(p.dates.month, index=p.dates).diff().fillna(0) != 0       # 月が変わった最初の営業日
+    sig = base & (pct <= bottom) & first.to_numpy()[:, None]
+    return sig, -vol, ExitSpec(stop_pct=0.9, max_hold=hold)
+
+
 STRATEGIES = {"pullback": pullback, "breakout": breakout, "gap_drift": gap_drift}
 # 調査中の戦略（学習期間の予選を通るまで、毎日の検証・判定には入れない）
 CANDIDATES = {"trend_vcp": trend_vcp, "qulla": qulla, "bnf_reversal": bnf_reversal,
-              "record_runup": record_runup, "kahanshin": kahanshin}
+              "record_runup": record_runup, "kahanshin": kahanshin, "reversal": reversal, "lowvol": lowvol}
 # フォワードテスト専用の戦略（過去の検証ができないもの）。検証・学習・手動バックテストの対象外
 FORWARD_ONLY = {"value": value}
 
 LABELS = {"pullback": "押し目買い", "breakout": "高値ブレイク", "gap_drift": "窓開け上昇の追随",
           "value": "割安株（低PBR）", "trend_vcp": "トレンド＋収縮ブレイク（ミネルヴィニ流）",
           "qulla": "急騰株のもみ合い放れ（クラマギー流）", "bnf_reversal": "25日線乖離の逆張り・半値戻しで利確（BNF流）",
-          "record_runup": "権利取りの先回り（夕凪流）", "kahanshin": "下半身の初動買い（相場師朗流）"}
+          "record_runup": "権利取りの先回り（夕凪流）", "kahanshin": "下半身の初動買い（相場師朗流）",
+          "reversal": "短期リバーサル（売られすぎの反発）", "lowvol": "低ボラティリティ株"}
 
 # 検証で試すパラメータの組み合わせ（多すぎると「たまたま良い組」を拾うので絞っている）
 GRID = {
@@ -232,6 +253,8 @@ GRID = {
     "bnf_reversal": {"dev_min": [-0.20, -0.30], "retrace": [0.33, 1.0], "max_hold": [2, 5]},
     "record_runup": {"lead": [40, 50], "sell_before": [1, 10]},
     "kahanshin": {"max_hold": [3, 7]},
+    "reversal": {"bottom": [0.03, 0.10], "hold": [3, 10]},
+    "lowvol": {"bottom": [0.05, 0.20], "hold": [10, 40]},
 }
 
 

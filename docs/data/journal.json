@@ -391,7 +391,10 @@
   "breakout|{\"exit\": \"target_ATR\\u00d71.5_hold10\", \"lookback\": 60, \"max_hold\": 40, \"regime\": false, \"trail_atr\": 2.0, \"vol_mult\": 2.5}|",
   "gap_drift|{\"exit\": \"target_+5%_hold10\", \"gap\": 0.05, \"max_hold\": 20, \"regime\": true, \"trail_atr\": 3.0, \"vol_mult\": 4.0}|",
   "gap_drift|{\"exit\": \"target_+10%_hold10\", \"gap\": 0.05, \"max_hold\": 20, \"regime\": true, \"trail_atr\": 3.0, \"vol_mult\": 4.0}|",
-  "gap_drift|{\"exit\": \"target_ATR\\u00d71.5_hold10\", \"gap\": 0.05, \"max_hold\": 20, \"regime\": true, \"trail_atr\": 3.0, \"vol_mult\": 4.0}|"
+  "gap_drift|{\"exit\": \"target_ATR\\u00d71.5_hold10\", \"gap\": 0.05, \"max_hold\": 20, \"regime\": true, \"trail_atr\": 3.0, \"vol_mult\": 4.0}|",
+  "reversal|{\"bottom\": 0.05, \"hold\": 5, \"look\": 5}|",
+  "reversal|{\"bottom\": 0.05, \"hold\": 20, \"look\": 20}|",
+  "lowvol|{\"bottom\": 0.1, \"hold\": 20, \"look\": 60}|"
  ],
  "extra_trials": 152,
  "entries": [
@@ -613,9 +616,20 @@
     "権利取りの先回りは、学習期間に時期が8回しかなく統計的に判断できない。優待の権利日データがあれば再検討の価値あり。"
    ],
    "result": "予選 12通り中 1通り通過 → 本選不合格"
+  },
+  {
+   "date": "2026-11-27",
+   "kind": "調査",
+   "title": "日本株で学術的に確認されている現象（短期リバーサル・低ボラティリティ）を検証（3通り）",
+   "body": "週単位・月単位のリバーサルと、低ボラティリティ株を学習期間で予選にかけた。すべて予選落ち。研究リスト H018・H019。価格と出来高だけのルールは、これで計547通りを試して合格なし。",
+   "lessons": [
+    "昔の研究で確認された日本株の短期反転は、2016〜2022年のデータでは見られなかった（週単位はむしろ負け）。研究が知られて効果が消える「アノマリーの消滅」の可能性。",
+    "価格と出来高だけでは市場平均に勝てるルールが見つからないことが、547通りの検証でかなり確かになった。次は決算・信用取引など別の種類のデータが必要（J-Quants Standardプランで10年分が取れる）。"
+   ],
+   "result": "予選 3通り中 0通り通過"
   }
  ],
- "trials_total": 544,
+ "trials_total": 547,
  "t_required": 3.0,
  "fwd_milestones": {}
 }
