@@ -5,6 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <title>スイングトレード判定</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="theme-color" content="#F2F4EF" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#141A19" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="スイング判定">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Shippori+Mincho+B1:wght@700;800&display=swap" rel="stylesheet">
@@ -685,6 +694,10 @@ document.addEventListener("click", ev => {
 });
 $("#stk").addEventListener("click", ev => { if (ev.target.id === "stk") ev.target.close(); });   // 外側を押すと閉じる
 
+/* スマホのアプリとして使う: 電波が無いときは前回保存した内容で開く（sw.js） */
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+window.addEventListener("offline", () => { const a = $("#asof"); if (a && !a.textContent.includes("オフライン")) a.textContent += "（オフライン：前回の内容を表示中）"; });
+
 (async () => {
   [T, V, PM] = await Promise.all([get("today.json"), get("validation.json"), get("postmortem.json")]);
   if (!T) $("#asof").textContent = "判定データがまだありません";
@@ -692,6 +705,7 @@ $("#stk").addEventListener("click", ev => { if (ev.target.id === "stk") ev.targe
   [D, J, HY, M] = await Promise.all([get("diagnosis.json"), get("journal.json"), get("hypotheses.json"), get("manual.json")]);
   renderLearn(); renderManual();
   Q = await get("quotes.json"); renderHold();
+  if (!navigator.onLine) window.dispatchEvent(new Event("offline"));
 })();
 </script>
 </body>
