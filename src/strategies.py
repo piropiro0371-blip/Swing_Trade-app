@@ -27,12 +27,16 @@ def _regime_mask(p: Panel, sig: pd.DataFrame, use: bool) -> pd.DataFrame:
     return sig & p.regime(200).to_numpy()[:, None]
 
 
-def pullback(p: Panel, base: pd.DataFrame, rsi_max=10, stop_atr=3.0, max_hold=7, regime=True, **_):
+def pullback(p: Panel, base: pd.DataFrame, rsi_max=10, stop_atr=3.0, max_hold=7, regime=True,
+             target_pct=None, rebound_exit=True, **_):
+    """target_pct: 買値の+○%に利確の指値を置く（2026-11-27 追加。日本株の短期反転に合わせ、早めに利益を確定する）
+    rebound_exit: 終値が5日線を上回ったら売る（従来の出口）。利確の指値と置き換えるときは False"""
     c = p.c
     sig = base & (c > p.sma(200)) & (p.sma(50) > p.sma(200)) & (p.rsi(2) < rsi_max)
     sig = _regime_mask(p, sig, regime)
     score = p.ret(126)  # 半年の上昇率が高い銘柄を優先
-    return sig, score, ExitSpec(stop_atr=stop_atr, exit_above_sma=5, max_hold=max_hold)
+    return sig, score, ExitSpec(stop_atr=stop_atr, exit_above_sma=5 if rebound_exit else None,
+                                target_pct=target_pct, max_hold=max_hold)
 
 
 def breakout(p: Panel, base: pd.DataFrame, lookback=60, vol_mult=2.0, stop_atr=2.0, trail_atr=3.0,
@@ -146,15 +150,74 @@ def qulla(p: Panel, base: pd.DataFrame, top_pct=0.02, min_ret=0.30, base_len=20,
     return sig, r63, ExitSpec(stop_low=True, exit_below_sma=exit_sma, max_hold=max_hold)
 
 
+def bnf_reversal(p: Panel, base: pd.DataFrame, dev_min=-0.25, retrace=0.5, max_hold=3, stop_pct=None, **_):
+    """BNF流の逆張り: 25日移動平均からの乖離率が dev_min 以下まで売り込まれた銘柄を買い、
+    乖離の retrace（既定は半分）が戻る値段に利確の指値を置く。届かなければ max_hold 営業日目の終値の翌朝に売る。
+    本人は固定の損切りを使っていないため、既定は期限で撤退するだけ（stop_pct で比較用の損切りを付けられる）。（2026-11-27 調査）"""
+    s25 = p.sma(25)
+    d = p.c / s25 - 1
+    sig = base & (d <= dev_min)
+    target = s25 * (1 + d * (1 - retrace))     # 例: -35%で買い、半分戻した -17.5% の値段で売る
+    return sig, -d, ExitSpec(stop_pct=stop_pct or 0.9, target_px=target, max_hold=max_hold)
+
+
+def _last_buy_days(p: Panel) -> list[int]:
+    """3月末・9月末の権利付き最終日（その日に持っていれば配当・優待の権利が付く最後の日）の位置。
+    2019年7月の決済期間の短縮より前は月末の3営業日前、以後は2営業日前。"""
+    out = []
+    d = pd.Series(range(len(p.dates)), index=p.dates)
+    for (y, m), g in d.groupby([p.dates.year, p.dates.month]):
+        if m not in (3, 9):
+            continue
+        last = int(g.iloc[-1])
+        lag = 2 if pd.Timestamp(year=y, month=m, day=1) >= pd.Timestamp("2019-07-16") else 3
+        if g.index[-1].day >= 25:          # その月のデータが月末までそろっているときだけ
+            out.append(last - lag)
+    return out
+
+
+def record_runup(p: Panel, base: pd.DataFrame, lead=60, sell_before=5, years=3, need=3, stop_pct=None, **_):
+    """権利取りの先回り（夕凪・羽根英樹・望戸/野瀬2015）: 3月・9月の権利付き最終日の lead 営業日前に買い、
+    sell_before 営業日前の寄り付きで売る（権利を取らずに、権利取りの買いが集まる所で売る）。
+    優待の有無のデータが無いので、過去 years 回の同じ月に「権利付き最終日の終値 > lead日前の終値」が need 回以上の銘柄に絞る。"""
+    sig = pd.DataFrame(False, index=p.dates, columns=p.codes)
+    c = p.c.to_numpy(dtype="float64")
+    lasts = _last_buy_days(p)
+    months = {k: p.dates[k].month for k in lasts}
+    for k in lasts:
+        prev = [q for q in lasts if q < k and months[q] == months[k]][-years:]
+        if len(prev) < years or k - lead - 1 < 0:
+            continue
+        ups = sum((c[q] > c[q - lead]).astype(int) for q in prev if q - lead >= 0)
+        row = k - lead - 1                   # シグナルの日（翌営業日の寄り付きで買う）
+        sig.iloc[row] = (ups >= need) & base.iloc[row].to_numpy()
+    score = pd.DataFrame(0.0, index=p.dates, columns=p.codes)
+    return sig, score, ExitSpec(stop_pct=stop_pct or 0.9, max_hold=lead - sell_before)
+
+
+def kahanshin(p: Panel, base: pd.DataFrame, max_hold=5, **_):
+    """相場師朗の「下半身」（日足版）: 5日>20日>60日線の並び（PPP）で100日線が上向きのとき、
+    直前3日は5日線の下にあった株価が、上向きの5日線を陽線で上抜けた（実体の半分以上が5日線の上）初動を買う。
+    損切りはシグナル日の安値、max_hold 営業日で手仕舞う（散弾銃法の「2日〜1週間で利確」）。（2026-11-27 調査）"""
+    c, o, s5 = p.c, p.o, p.sma(5)
+    ppp = (s5 > p.sma(20)) & (p.sma(20) > p.sma(60)) & (p.sma(100) > p.sma(100).shift(5))
+    below = (c.shift(1) < s5.shift(1)) & (c.shift(2) < s5.shift(2)) & (c.shift(3) < s5.shift(3))
+    kah = (c > o) & ((c + o) / 2 >= s5) & (s5 >= s5.shift(1))
+    sig = base & ppp & below & kah
+    return sig, p.ret(126), ExitSpec(stop_low=True, max_hold=max_hold)
+
+
 STRATEGIES = {"pullback": pullback, "breakout": breakout, "gap_drift": gap_drift}
 # 調査中の戦略（学習期間の予選を通るまで、毎日の検証・判定には入れない）
-CANDIDATES = {"trend_vcp": trend_vcp, "qulla": qulla}
+CANDIDATES = {"trend_vcp": trend_vcp, "qulla": qulla, "bnf_reversal": bnf_reversal,
+              "record_runup": record_runup, "kahanshin": kahanshin}
 # フォワードテスト専用の戦略（過去の検証ができないもの）。検証・学習・手動バックテストの対象外
 FORWARD_ONLY = {"value": value}
 
 LABELS = {"pullback": "押し目買い", "breakout": "高値ブレイク", "gap_drift": "窓開け上昇の追随",
           "value": "割安株（低PBR）", "trend_vcp": "トレンド＋収縮ブレイク（ミネルヴィニ流）",
-          "qulla": "急騰株のもみ合い放れ（クラマギー流）"}
+          "qulla": "急騰株のもみ合い放れ（クラマギー流）", "bnf_reversal": "25日線乖離の逆張り・半値戻しで利確（BNF流）",
+          "record_runup": "権利取りの先回り（夕凪流）", "kahanshin": "下半身の初動買い（相場師朗流）"}
 
 # 検証で試すパラメータの組み合わせ（多すぎると「たまたま良い組」を拾うので絞っている）
 GRID = {
@@ -166,6 +229,9 @@ GRID = {
     # 調査中（既定値は本人の説明どおり。崩れないかを見るための少数の組だけ）
     "trend_vcp": {"rs_min": [70, 80], "contract": [0.5, 0.7], "exit_sma": [20, 50]},
     "qulla": {"top_pct": [0.01, 0.05], "base_range": [1.15, 1.25], "exit_sma": [10, 20]},
+    "bnf_reversal": {"dev_min": [-0.20, -0.30], "retrace": [0.33, 1.0], "max_hold": [2, 5]},
+    "record_runup": {"lead": [40, 50], "sell_before": [1, 10]},
+    "kahanshin": {"max_hold": [3, 7]},
 }
 
 

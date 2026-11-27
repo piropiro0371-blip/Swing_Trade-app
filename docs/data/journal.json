@@ -379,7 +379,19 @@
   "breakout|{\"exit\": \"pct7_sma50\", \"lookback\": 60, \"max_hold\": 40, \"regime\": false, \"trail_atr\": 2.0, \"vol_mult\": 2.5}|",
   "gap_drift|{\"exit\": \"pct7_sma10\", \"gap\": 0.05, \"max_hold\": 20, \"regime\": true, \"trail_atr\": 3.0, \"vol_mult\": 4.0}|",
   "gap_drift|{\"exit\": \"pct7_sma20\", \"gap\": 0.05, \"max_hold\": 20, \"regime\": true, \"trail_atr\": 3.0, \"vol_mult\": 4.0}|",
-  "gap_drift|{\"exit\": \"pct7_sma50\", \"gap\": 0.05, \"max_hold\": 20, \"regime\": true, \"trail_atr\": 3.0, \"vol_mult\": 4.0}|"
+  "gap_drift|{\"exit\": \"pct7_sma50\", \"gap\": 0.05, \"max_hold\": 20, \"regime\": true, \"trail_atr\": 3.0, \"vol_mult\": 4.0}|",
+  "bnf_reversal|{}|",
+  "record_runup|{}|",
+  "kahanshin|{}|",
+  "pullback|{\"exit\": \"target_+5%_hold10\", \"max_hold\": 10, \"regime\": true, \"rsi_max\": 5, \"stop_atr\": 3.0}|",
+  "pullback|{\"exit\": \"target_+10%_hold10\", \"max_hold\": 10, \"regime\": true, \"rsi_max\": 5, \"stop_atr\": 3.0}|",
+  "pullback|{\"exit\": \"target_ATR\\u00d71.5_hold10\", \"max_hold\": 10, \"regime\": true, \"rsi_max\": 5, \"stop_atr\": 3.0}|",
+  "breakout|{\"exit\": \"target_+5%_hold10\", \"lookback\": 60, \"max_hold\": 40, \"regime\": false, \"trail_atr\": 2.0, \"vol_mult\": 2.5}|",
+  "breakout|{\"exit\": \"target_+10%_hold10\", \"lookback\": 60, \"max_hold\": 40, \"regime\": false, \"trail_atr\": 2.0, \"vol_mult\": 2.5}|",
+  "breakout|{\"exit\": \"target_ATR\\u00d71.5_hold10\", \"lookback\": 60, \"max_hold\": 40, \"regime\": false, \"trail_atr\": 2.0, \"vol_mult\": 2.5}|",
+  "gap_drift|{\"exit\": \"target_+5%_hold10\", \"gap\": 0.05, \"max_hold\": 20, \"regime\": true, \"trail_atr\": 3.0, \"vol_mult\": 4.0}|",
+  "gap_drift|{\"exit\": \"target_+10%_hold10\", \"gap\": 0.05, \"max_hold\": 20, \"regime\": true, \"trail_atr\": 3.0, \"vol_mult\": 4.0}|",
+  "gap_drift|{\"exit\": \"target_ATR\\u00d71.5_hold10\", \"gap\": 0.05, \"max_hold\": 20, \"regime\": true, \"trail_atr\": 3.0, \"vol_mult\": 4.0}|"
  ],
  "extra_trials": 152,
  "entries": [
@@ -588,9 +600,22 @@
     "有名トレーダーの実績は本人の主張か大会主催者の発表で、同じ手法で退場した人は見えない（生存者バイアス）点にも注意。"
    ],
    "result": "予選 11通り中 0通り通過"
+  },
+  {
+   "date": "2026-11-27",
+   "kind": "調査",
+   "title": "日本のスイングトレーダー（BNF・相場師朗・夕凪・DUKE。など）の手法と「利確」を検証（12通り）",
+   "body": "日本株で実績のある人の利確は「戻りの途中で売る（BNF）」「イベントの前に売る（優待先回り）」「異常な急騰で売る（DUKE。）」で、保有は2日〜1週間と短い。これを売買ルールに直し、BNF流・権利取りの先回り・相場師朗流の下半身と、既存3戦略に利確の指値（+5%・+10%・ATR×1.5）を付けた9通りの計12通りを学習期間で予選にかけた。予選を通ったのは「押し目買い＋5%で利確・最長10日」の1通りだけで、本選（5基準）では検証期間に市場平均を下回り不合格。研究リスト H014〜H017。",
+   "lessons": [
+    "利確の指値を入れると勝率は6割前後に上がり、押し目買いは検証期間でも1回あたりプラス（+0.55%）になった。ただし上昇相場では市場平均に大きく負ける（20万円で-16.3%、TOPIX+133%）。「勝率が高い」と「市場平均に勝つ」は別物。",
+    "順張り（高値ブレイク・窓開け追随）に早めの利確を付けると、数少ない大勝ちを切り落としてかえって悪化した。利確の向き不向きは買い方で決まる。",
+    "BNF流の逆張りは反発するが半値戻しまで届かないことが多い（利確の到達13%）。昔の大荒れ相場の数値は今の相場に合わない可能性。",
+    "権利取りの先回りは、学習期間に時期が8回しかなく統計的に判断できない。優待の権利日データがあれば再検討の価値あり。"
+   ],
+   "result": "予選 12通り中 1通り通過 → 本選不合格"
   }
  ],
- "trials_total": 532,
+ "trials_total": 544,
  "t_required": 3.0,
  "fwd_milestones": {}
 }

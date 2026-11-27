@@ -125,6 +125,8 @@ class ExitSpec:
                                    #       （S株＝1株単位の取引は逆指値注文が使えないため）
     stop_pct: float | None = None  # 損切りを「買値から何%下」で置く（例 0.07 = -7%。オニール・ミネルヴィニ流）。stop_atr より優先
     stop_low: bool = False         # 損切りを「シグナルが出た日の安値」に置く（クラマギー流）。stop_pct より優先
+    target_pct: float | None = None  # 利確の指値を「買値から何%上」に置く（例 0.10 = +10%）。target_atr より優先
+    target_px: object = None       # 利確の指値をシグナルの日に値段で決める表（日付×銘柄。BNF流の「乖離の半値戻し」など）。最優先
 
 
 def simulate(p: Panel, entries: pd.DataFrame, score: pd.DataFrame, ex: ExitSpec,
@@ -136,6 +138,7 @@ def simulate(p: Panel, entries: pd.DataFrame, score: pd.DataFrame, ex: ExitSpec,
     S = score.to_numpy(dtype="float64")
     SA = p.sma(ex.exit_above_sma).to_numpy(dtype="float64") if ex.exit_above_sma else None
     SB = p.sma(ex.exit_below_sma).to_numpy(dtype="float64") if ex.exit_below_sma else None
+    TP = ex.target_px.to_numpy(dtype="float64") if ex.target_px is not None else None
     n = len(p.dates)
     rows = []
     cols = np.flatnonzero(E.any(axis=0))
@@ -161,7 +164,9 @@ def simulate(p: Panel, entries: pd.DataFrame, score: pd.DataFrame, ex: ExitSpec,
             if not (stop < entry):   # 寄り付きが損切りラインより下なら買わない
                 continue
             stop0 = stop   # 買った時点の損切りライン（資金管理で使う「損切りまでの幅」）
-            target = entry + ex.target_atr * atr if ex.target_atr else None
+            target = (TP[i, j] if TP is not None and np.isfinite(TP[i, j])
+                      else entry * (1 + ex.target_pct) if ex.target_pct
+                      else entry + ex.target_atr * atr if ex.target_atr else None)
             hi_close = entry
             exit_px = None
             reason = "open"
