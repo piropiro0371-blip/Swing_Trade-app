@@ -731,15 +731,6 @@
    "known_weak": 2,
    "patterns": [],
    "registered": []
-  },
-  "value": {
-   "label": "割安株（低PBR）",
-   "losses": 0,
-   "closed": 0,
-   "causes": [],
-   "known_weak": 0,
-   "patterns": [],
-   "registered": []
   }
  }
 }

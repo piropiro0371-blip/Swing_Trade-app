@@ -19,7 +19,7 @@ import os
 import numpy as np
 import pandas as pd
 
-from . import analysis, data, diagnose, features, fundamentals, journal, postmortem
+from . import analysis, data, diagnose, features, fundamentals, journal, postmortem, private
 from .engine import BENCH, Panel, simulate, stats
 from .research import load_config, save_config, sid_of
 from .strategies import FORWARD_ONLY, LABELS, build_signal
@@ -145,7 +145,20 @@ def run() -> None:
         # そのときは、すでに出ている新しい日の判定を古い日付で上書きしない
         print(f"{ds} は公開中の判定（{prev_today['date']}）より古いため、書き出さずに終了します", flush=True)
         return
-    seen = {(s["date"], s["code"], s["strategy"]) for s in ledger["signals"]}
+    # --- 非公開の戦略（割安株などJ-Quants由来）の記録は、暗号化した非公開データ側に置く（src/private.py）
+    priv_ids = {sid_of(x) for x in cfg.get("adopted", []) + cfg.get("watch", []) if x["name"] in FORWARD_ONLY}
+    can_keep = bool(private.passphrase()) or not os.environ.get("GITHUB_ACTIONS")   # 非公開データを残せる環境か
+    priv = private.load() if can_keep else None
+    moved = [x for x in ledger["signals"] if x["strategy"] in priv_ids]
+    if moved and can_keep:   # 以前は公開の台帳にあった記録を非公開側へ移す（記録は消さない）
+        priv = priv or {}
+        have = {(x["date"], x["code"], x["strategy"]) for x in priv.get("ledger", [])}
+        priv.setdefault("ledger", []).extend(x for x in moved if (x["date"], x["code"], x["strategy"]) not in have)
+        ledger["signals"] = [x for x in ledger["signals"] if x["strategy"] not in priv_ids]
+        print(f"公開の台帳にあった非公開戦略の記録 {len(moved)}件を非公開データへ移しました", flush=True)
+    priv_ledger = priv.setdefault("ledger", []) if priv is not None else []
+    all_signals = lambda: ledger["signals"] + priv_ledger
+    seen = {(x["date"], x["code"], x["strategy"]) for x in all_signals()}
 
     def info(code):
         m = meta.loc[code] if code in meta.index else None
@@ -159,9 +172,15 @@ def run() -> None:
     diag = {s["id"]: s for s in _load_json(os.path.join(DOCS, "diagnosis.json"), {"strategies": []})["strategies"]}
     moves = []   # 昇格・降格（ループの後でまとめて設定に反映）
     pm = postmortem.load()   # フォワードの負けトレードの逐次分析
+    if priv is not None:
+        pm["cases"] += priv.get("pm_cases", [])
+        pm["strategies"].update(priv.get("pm_strategies", {}))
     for spec, adopted in entries:
         name, params = spec["name"], spec["params"]
         sid = sid_of(spec)                    # 台帳や画面で戦略を区別する名前
+        if sid in priv_ids and priv is None:
+            print(f"[{sid}] 非公開データ（合言葉 SWING_PASSPHRASE）が無いため、この戦略は今回は扱いません", flush=True)
+            continue
         filters = spec.get("filters") or []
         label = spec.get("label") or LABELS[name]
         sig, score, ex = build_signal(p, base, name, params, filters)
@@ -174,14 +193,14 @@ def run() -> None:
         if name in FORWARD_ONLY:
             # フォワード専用の戦略: 売買の再現は台帳の記録から行う（決算データが無い環境でも追跡を続けられる）
             sig = pd.DataFrame(False, index=p.dates, columns=p.codes)
-            for s in ledger["signals"]:
+            for s in all_signals():
                 d = pd.Timestamp(s["date"])
                 if s["strategy"] == sid and s["code"] in sig.columns and d in sig.index:
                     sig.at[d, s["code"]] = True
             if fundamentals.load().empty:
                 # 決算データが無い（GitHub上の自動実行）: 新しい候補は出さず、前回このPCで出した候補を表示し続ける
                 cands = []
-                carried = next((x for x in prev_today.get("strategies", []) if x.get("id") == sid), None)
+                carried = next((x for x in (priv or {}).get("strategies", []) if x.get("id") == sid), None)
             else:
                 held = set(simulate(p, sig, score, ex, cost=cost, include_open=True).query("reason == 'open'")["code"])
                 cands = [c for c in cands if c not in held][: spec.get("max_signals", 5)]   # 保有中を除き、上位だけ記録
@@ -191,8 +210,8 @@ def run() -> None:
             c, a = float(close_now[code]), float(atr_now[code])
             key = (ds, code, sid)
             if key not in seen:
-                ledger["signals"].append({"date": ds, "code": code, "strategy": sid, "rank": rank,
-                                          "close": _r(c), "adopted": adopted})
+                (priv_ledger if sid in priv_ids else ledger["signals"]).append(
+                    {"date": ds, "code": code, "strategy": sid, "rank": rank, "close": _r(c), "adopted": adopted})
                 seen.add(key)
             if rank <= TOP_N:
                 stop_w = ex.stop_atr * a                      # 買値から損切りまでの値幅（1株あたり）
@@ -210,7 +229,7 @@ def run() -> None:
 
         # --- フォワードテスト: 台帳に載ったシグナルだけをルール通りに売買したと仮定
         tr = simulate(p, sig, score, ex, cost=cost, include_open=True)
-        led = {(s["date"], s["code"]): s for s in ledger["signals"] if s["strategy"] == sid}
+        led = {(s["date"], s["code"]): s for s in all_signals() if s["strategy"] == sid}
         tr["key"] = list(zip(pd.to_datetime(tr["signal_date"]).dt.strftime("%Y-%m-%d"), tr["code"])) if len(tr) else []
         fwd = tr[tr["key"].isin(led.keys())].copy()
         fwd["rank"] = [led[k]["rank"] for k in fwd["key"]]
@@ -315,7 +334,12 @@ def run() -> None:
     if moves:
         save_config(cfg)
     journal.save(j)
-    postmortem.save(pm)
+    # 公開分と非公開分（J-Quants由来の戦略）に分ける。非公開分は暗号化したファイルにだけ書く
+    pub_strats = [x for x in strategies_out if x["id"] not in priv_ids]
+    prv_strats = [x for x in strategies_out if x["id"] in priv_ids]
+    pm_pub = {**pm, "cases": [c for c in pm["cases"] if c["strategy"] not in priv_ids],
+              "strategies": {k: v for k, v in pm["strategies"].items() if k not in priv_ids}}
+    postmortem.save(pm_pub)
     _dump(LEDGER, ledger)
 
     b = p.c[BENCH].dropna()
@@ -326,7 +350,10 @@ def run() -> None:
         "regime": {"up": regime_up, "topix_etf": _r(float(b.iloc[-1])),
                    "sma200": _r(float(b.rolling(200).mean().iloc[-1])),
                    "ret20": _r(float(b.iloc[-1] / b.iloc[-21] - 1) * 100)},
-        "n_tradable": int(base.iloc[-1].sum()), "strategies": strategies_out,
+        "n_tradable": int(base.iloc[-1].sum()), "strategies": pub_strats,
+        # 非公開の戦略があることだけを知らせる（中身は private.enc。合言葉を入れた端末だけが表示する）
+        "private": [{"id": x["id"], "label": x["label"]} for x in prv_strats] or
+                   [{"id": i, "label": LABELS.get(i, i)} for i in sorted(priv_ids)],
     })
 
     # --- 保有株の売り判定用: 銘柄ごとの直近の終値・ATR・5日移動平均
@@ -346,22 +373,34 @@ def run() -> None:
           {"dates": [d.strftime("%Y-%m-%d") for d in tail.index], "cols": analysis.SNAP_COLS, "q": quotes})
 
     # --- 銘柄の詳細に出すローソク足（買い候補・仮想保有・最近の決済・負けの分析に出てくる銘柄だけ）
-    show = []
-    for so in strategies_out:
-        show += [c["code"] for c in so["candidates"]] + [t["code"] for t in so["open"]] + [t["code"] for t in so["closed"][:20]]
-    show += [c["code"] for c in pm["cases"][-20:]]
     win = slice(-CHART_DAYS, None)
     s25, s75 = p.sma(25).iloc[win], p.sma(75).iloc[win]
-    charts = {}
-    for code in dict.fromkeys(show):
-        if code not in p.codes:
-            continue
-        charts[code] = {"o": [_r(x) for x in p.o[code].iloc[win]], "h": [_r(x) for x in p.h[code].iloc[win]],
-                        "l": [_r(x) for x in p.l[code].iloc[win]], "c": [_r(x) for x in p.c[code].iloc[win]],
-                        "v": [None if not np.isfinite(x) else int(x) for x in p.v[code].iloc[win]],
-                        "s25": [_r(x) for x in s25[code]], "s75": [_r(x) for x in s75[code]]}
-    _dump(os.path.join(DOCS, "charts.json"),
-          {"dates": [d.strftime("%Y-%m-%d") for d in p.dates[win]], "s": charts})
+    chart_dates = [d.strftime("%Y-%m-%d") for d in p.dates[win]]
+
+    def chart_set(strats, cases):
+        show = []
+        for so in strats:
+            show += [c["code"] for c in so["candidates"]] + [t["code"] for t in so["open"]] + [t["code"] for t in so["closed"][:20]]
+        show += [c["code"] for c in cases[-20:]]
+        out = {}
+        for code in dict.fromkeys(show):
+            if code not in p.codes:
+                continue
+            out[code] = {"o": [_r(x) for x in p.o[code].iloc[win]], "h": [_r(x) for x in p.h[code].iloc[win]],
+                         "l": [_r(x) for x in p.l[code].iloc[win]], "c": [_r(x) for x in p.c[code].iloc[win]],
+                         "v": [None if not np.isfinite(x) else int(x) for x in p.v[code].iloc[win]],
+                         "s25": [_r(x) for x in s25[code]], "s75": [_r(x) for x in s75[code]]}
+        return out
+
+    _dump(os.path.join(DOCS, "charts.json"), {"dates": chart_dates, "s": chart_set(pub_strats, pm_pub["cases"])})
+    if priv is not None:
+        pm_prv = [c for c in pm["cases"] if c["strategy"] in priv_ids]
+        bundle = clean_json({"date": ds, "ledger": priv_ledger, "strategies": prv_strats, "chart_dates": chart_dates,
+                             "charts": chart_set(prv_strats, pm_prv), "pm_cases": pm_prv,
+                             "pm_strategies": {k: v for k, v in pm["strategies"].items() if k in priv_ids}})
+        enc = private.save(bundle)
+        print("非公開データを" + ("暗号化して docs/data/private.enc に保存しました" if enc
+                               else "PCの控え（data/private/bundle.json）にだけ保存しました（合言葉が未設定）"), flush=True)
     print(f"{ds} 分を書き出しました（地合い: {'上昇基調' if regime_up else '下落基調'}）")
 
 

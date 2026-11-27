@@ -197,6 +197,50 @@ document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
 });
 
 let T = null, V = null, Q = null, D = null, J = null, HY = null, M = null, PM = null;
+/* ---- 非公開の戦略（割安株などJ-Quants由来）: 合言葉で復号して表示する ----
+   J-Quantsの規約で分析結果を第三者へ継続的に配信できないため、data/private.enc は暗号化してある。
+   合言葉はこの端末の中だけに保存し、外部には送らない。復号はブラウザの中（Web Crypto）で行う。 */
+const PKEY = "swing_private_pass_v1";
+let UNLOCKED = false, PRIVCH = null, PRIV_STATE = "";
+const b64u8 = x => Uint8Array.from(atob(x), c => c.charCodeAt(0));
+async function decryptBundle(env, pw){
+  const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(pw), "PBKDF2", false, ["deriveKey"]);
+  const key = await crypto.subtle.deriveKey({name: "PBKDF2", salt: b64u8(env.salt), iterations: env.iter, hash: "SHA-256"},
+                                            base, {name: "AES-GCM", length: 256}, false, ["decrypt"]);
+  const pt = await crypto.subtle.decrypt({name: "AES-GCM", iv: b64u8(env.iv)}, key, b64u8(env.ct));
+  return JSON.parse(new TextDecoder().decode(pt));
+}
+async function unlock(pw, quiet){
+  if (UNLOCKED || !T) return true;
+  const env = await get("private.enc");
+  if (!env) { PRIV_STATE = "none"; return false; }
+  let b;
+  try { b = await decryptBundle(env, pw); } catch { PRIV_STATE = quiet ? "" : "wrong"; return false; }
+  try { localStorage.setItem(PKEY, pw); } catch {}
+  UNLOCKED = true; PRIV_STATE = "";
+  T.strategies.push(...(b.strategies || []));
+  if (PM) PM.cases.push(...(b.pm_cases || []));
+  PRIVCH = {dates: b.chart_dates || [], s: b.charts || {}};
+  renderToday(); renderFwd(); renderRule(); renderHold();
+  return true;
+}
+function lockCard(){
+  if (UNLOCKED || !T || !(T.private || []).length) return "";
+  const names = T.private.map(x => esc(x.label)).join("・");
+  const msg = PRIV_STATE === "wrong" ? `<p class="note" style="color:var(--ng)">合言葉が違います。</p>`
+            : PRIV_STATE === "none" ? `<p class="note">暗号化したデータがまだありません（合言葉の設定待ち）。</p>` : "";
+  return `<div class="card"><h2>${names} <span class="badge">非公開</span></h2>
+    <div class="note">J-Quantsの決算データから作る戦略は、規約により公開ページに載せられないため暗号化しています。合言葉を入れると、この端末でだけ表示されます。</div>
+    <form class="h unlock" style="margin-top:10px"><div><label>合言葉</label><input type="password" name="pw" autocomplete="current-password" required></div>
+    <div><button class="b">表示する</button></div></form>${msg}</div>`;
+}
+document.addEventListener("submit", async ev => {
+  if (!ev.target.classList.contains("unlock")) return;
+  ev.preventDefault();
+  const pw = new FormData(ev.target).get("pw");
+  if (!(await unlock(String(pw)))) { renderToday(); renderFwd(); }
+});
+
 const stageBadge = s => `<span class="badge ${s.adopted?"ok":"warn"}">${esc(s.stage || (s.adopted?"採用中":"検証中"))}${s.adopted?"":"（参考）"}</span>`;
 const sidOf = s => s.id || s.name;
 
@@ -278,7 +322,7 @@ function renderToday(){
     }
     h += `</div>`;
   }
-  el.innerHTML = h;
+  el.innerHTML = h + lockCard();
 }
 
 function tradeTable(rows, open){
@@ -332,7 +376,7 @@ function renderFwd(){
       <h3>仮想で保有中</h3>${tradeTable(s.open, true)}
       <h3>決済済み（新しい順）</h3>${tradeTable(s.closed, false)}</div>`;
   }
-  el.innerHTML = h;
+  el.innerHTML = h + lockCard();
 }
 
 function chart(curve, bench){
@@ -658,14 +702,14 @@ function indicators(q, cols){
 async function openStock(code, ctx){
   const dlg = $("#stk");
   if (!CH) CH = await get("charts.json") || {dates: [], s: {}};
-  const q = Q && Q.q[code], d = CH.s[code];
+  const q = Q && Q.q[code], d = CH.s[code] || (PRIVCH && PRIVCH.s[code]);
   const name = q ? q.n : code, last = q ? q.c.at(-1) : (d ? d.c.at(-1) : null), prev = q ? q.c.at(-2) : null;
   const lines = [];
   if (ctx.entry) lines.push({v: ctx.entry, label: "買値", col: "var(--ink)"});
   if (ctx.stop) lines.push({v: ctx.stop, label: "逆指値", col: "var(--caution)"});
   let chart = "", dates = [], src = null;
   const W = Math.round(Math.min(720, Math.max(320, innerWidth - 70)));   // 画面幅に合わせて描く（縮小で文字が潰れないように）
-  if (d) { dates = CH.dates; src = d; chart = candleSvg(dates, d, lines, W); }
+  if (d) { dates = CH.s[code] ? CH.dates : PRIVCH.dates; src = d; chart = candleSvg(dates, d, lines, W); }
   else if (q) { dates = Q.dates; src = {o: q.c, h: q.c, l: q.c, c: q.c, v: q.c.map(() => null), s25: [], s75: [], line: true}; chart = candleSvg(dates, src, lines, W); }
   dlg.innerHTML = `<div class="sk-hd"><span class="cd">${esc(code)}</span><span class="nm" id="stk-t">${esc(name)}</span>
       ${q ? `<span class="mk">${esc(q.m || "")}${q.g ? "・" + esc(q.g) : ""}</span>` : ""}
@@ -712,6 +756,8 @@ window.addEventListener("offline", showOffline);
   [D, J, HY, M] = await Promise.all([get("diagnosis.json"), get("journal.json"), get("hypotheses.json"), get("manual.json")]);
   renderLearn(); renderManual();
   Q = await get("quotes.json"); renderHold();
+  let saved = null; try { saved = localStorage.getItem(PKEY); } catch {}
+  if (saved) await unlock(saved, true);
   if (FROM_CACHE || !navigator.onLine) showOffline();   // 判定の表示で上書きされた後にもう一度付ける
 })();
 </script>

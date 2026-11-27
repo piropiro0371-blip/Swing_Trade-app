@@ -92,6 +92,8 @@ jobs:
           python -m src.splits
 
       - name: 判定とフォワードテストの更新（フォワードの負けの分析と仮説の登録を含む）
+        env:
+          SWING_PASSPHRASE: ${{ secrets.SWING_PASSPHRASE }}   # 割安株など非公開データの暗号化に使う合言葉（この手順にだけ渡す）
         run: python -m src.daily
 
       # --- 学習サイクル（毎回）: 10年分で検証し直し → 負けの原因を分析 → 改善案と、今日までに
